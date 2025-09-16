@@ -11,7 +11,11 @@ interface ChartDataPoint {
   day: 'today' | 'tomorrow';
 }
 
-export const PriceChart = () => {
+interface PriceChartProps {
+  currentBiddingZone?: string;
+}
+
+export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceChartProps) => {
   const { toast } = useToast();
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +33,7 @@ export const PriceChart = () => {
       tomorrow.setDate(tomorrow.getDate() + 2); // Include full tomorrow
 
       const config: PriceProviderConfig = {
-        biddingZone: CONFIG.biddingZone,
+        biddingZone: currentBiddingZone,
         currency: CONFIG.currency,
         timezone: CONFIG.timezone,
       };
@@ -90,7 +94,7 @@ export const PriceChart = () => {
   // Refresh when provider or config changes
   useEffect(() => {
     fetchLivePriceData();
-  }, [CONFIG.priceProvider, CONFIG.biddingZone]);
+  }, [CONFIG.priceProvider, currentBiddingZone]);
 
   const formatTooltipValue = (value: number, name: string) => {
     return [`${value.toFixed(3)} SEK/kWh`, 'Price'];
@@ -138,7 +142,7 @@ export const PriceChart = () => {
         <div>
           <h4 className="text-sm font-medium">Today & Tomorrow Prices</h4>
           <p className="text-xs text-muted-foreground">
-            {chartData.length} hours • {CONFIG.priceProvider} • {CONFIG.biddingZone}
+            {chartData.length} hours • {CONFIG.priceProvider} • {currentBiddingZone}
           </p>
         </div>
         <div className="text-right">
