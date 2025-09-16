@@ -1,51 +1,224 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
-import { MOCK_PRICE_DATA, calculateRollingAverage } from '@/services/priceService';
+import { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
+import { fetchPrices, calculateRollingAverage, PricePoint, PriceProviderConfig } from '@/services/priceService';
+import { CONFIG } from '@/lib/config';
+import { useToast } from '@/hooks/use-toast';
+
+interface ChartDataPoint {
+  time: string;
+  price: number;
+  timestamp: Date;
+  day: 'today' | 'tomorrow';
+}
 
 export const PriceChart = () => {
-  const chartData = MOCK_PRICE_DATA.map(point => ({
-    time: point.start.getHours(),
-    price: point.value / 100, // Convert öre to SEK for display
-    timestamp: point.start,
-  }));
+  const { toast } = useToast();
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [averagePrice, setAveragePrice] = useState(0);
 
-  const averagePrice = calculateRollingAverage(MOCK_PRICE_DATA, 7) / 100; // Convert to SEK
+  const fetchLivePriceData = async () => {
+    try {
+      setLoading(true);
+      
+      // Calculate date range for today and tomorrow
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 2); // Include full tomorrow
 
-  const getBarColor = (price: number) => {
-    if (price < averagePrice * 0.85) return 'hsl(var(--success))';
-    if (price > averagePrice * 1.15) return 'hsl(var(--destructive))';
-    return 'hsl(var(--muted-foreground))';
+      const config: PriceProviderConfig = {
+        biddingZone: CONFIG.biddingZone,
+        currency: CONFIG.currency,
+        timezone: CONFIG.timezone,
+      };
+
+      // Fetch price data
+      const prices = await fetchPrices(CONFIG.priceProvider, config, today, tomorrow);
+      
+      // Calculate rolling average for reference line
+      const avgPrice = calculateRollingAverage(prices, CONFIG.rollingDays);
+      setAveragePrice(avgPrice);
+
+      // Transform data for chart
+      const transformedData: ChartDataPoint[] = prices
+        .map(point => {
+          const isToday = point.start.toDateString() === now.toDateString();
+          const isTomorrow = point.start.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          
+          if (!isToday && !isTomorrow) return null;
+          
+          return {
+            time: point.start.toLocaleTimeString('sv-SE', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: false 
+            }),
+            price: point.value,
+            timestamp: point.start,
+            day: isToday ? 'today' as const : 'tomorrow' as const
+          };
+        })
+        .filter((point): point is ChartDataPoint => point !== null);
+
+      setChartData(transformedData);
+      setLastUpdate(new Date());
+      
+    } catch (error) {
+      console.error('Failed to fetch price data:', error);
+      toast({
+        title: "Price Data Error",
+        description: "Failed to fetch latest electricity prices. Using cached data.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Initial load and periodic refresh
+  useEffect(() => {
+    fetchLivePriceData();
+    
+    // Refresh every 30 minutes
+    const interval = setInterval(fetchLivePriceData, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh when provider or config changes
+  useEffect(() => {
+    fetchLivePriceData();
+  }, [CONFIG.priceProvider, CONFIG.biddingZone]);
+
+  const formatTooltipValue = (value: number, name: string) => {
+    return [`${value.toFixed(3)} SEK/kWh`, 'Price'];
+  };
+
+  const formatTooltipLabel = (label: string, payload: any[]) => {
+    if (payload && payload[0]) {
+      const data = payload[0].payload as ChartDataPoint;
+      const date = data.timestamp.toLocaleDateString('sv-SE', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      return `${date} ${label}`;
+    }
+    return label;
+  };
+
+  const getLineColor = (dataKey: string) => {
+    return 'hsl(var(--primary))';
+  };
+
+  const formatXAxisTick = (tickItem: string, index: number) => {
+    // Show fewer ticks to avoid crowding
+    if (index % 4 === 0) {
+      return tickItem;
+    }
+    return '';
+  };
+
+  if (loading && chartData.length === 0) {
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Loading live price data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis 
-            dataKey="time" 
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={12}
-            interval={3}
-            tickFormatter={(hour) => `${hour.toString().padStart(2, '0')}:00`}
-          />
-          <YAxis 
-            stroke="hsl(var(--muted-foreground))"
-            fontSize={12}
-            label={{ value: 'SEK/kWh', angle: -90, position: 'insideLeft' }}
-          />
-          <ReferenceLine 
-            y={averagePrice} 
-            stroke="hsl(var(--primary))" 
-            strokeDasharray="5 5"
-            label={{ value: "7-day avg", position: "top" }}
-          />
-          <Bar dataKey="price" radius={[2, 2, 0, 0]}>
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={getBarColor(entry.price)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="space-y-4">
+      {/* Header with status */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-medium">Today & Tomorrow Prices</h4>
+          <p className="text-xs text-muted-foreground">
+            {chartData.length} hours • {CONFIG.priceProvider} • {CONFIG.biddingZone}
+          </p>
+        </div>
+        <div className="text-right">
+          {lastUpdate && (
+            <p className="text-xs text-muted-foreground">
+              Updated: {lastUpdate.toLocaleTimeString('sv-SE')}
+            </p>
+          )}
+          <button 
+            onClick={fetchLivePriceData}
+            className="text-xs text-primary hover:underline"
+            disabled={loading}
+          >
+            {loading ? 'Updating...' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis 
+              dataKey="time" 
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              tickFormatter={formatXAxisTick}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+            />
+            <YAxis 
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              tickFormatter={(value) => `${value.toFixed(2)}`}
+              label={{ value: 'SEK/kWh', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+            />
+            <Tooltip 
+              formatter={formatTooltipValue}
+              labelFormatter={formatTooltipLabel}
+              contentStyle={{
+                backgroundColor: 'hsl(var(--background))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '6px',
+              }}
+            />
+            {averagePrice > 0 && (
+              <ReferenceLine 
+                y={averagePrice} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeDasharray="5 5"
+                label={{ value: `${CONFIG.rollingDays}d avg`, position: "top", fontSize: 10 }}
+              />
+            )}
+            <Line 
+              type="monotone" 
+              dataKey="price" 
+              stroke={getLineColor('price')}
+              strokeWidth={2}
+              dot={{ fill: 'hsl(var(--primary))', strokeWidth: 0, r: 3 }}
+              activeDot={{ r: 5, fill: 'hsl(var(--primary))' }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center justify-center space-x-6 text-xs">
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-0.5 bg-primary"></div>
+          <span className="text-muted-foreground">Electricity Price</span>
+        </div>
+        {averagePrice > 0 && (
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
+            <span className="text-muted-foreground">{CONFIG.rollingDays}-day Average</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

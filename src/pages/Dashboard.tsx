@@ -7,6 +7,8 @@ import { Thermometer, Zap, TrendingUp, Power, Settings } from "lucide-react";
 import { PriceChart } from "@/components/dashboard/PriceChart";
 import { TargetForecast } from "@/components/dashboard/TargetForecast";
 import { useToast } from "@/hooks/use-toast";
+import { fetchPrices, calculateRollingAverage, classifyPrice, PriceProviderConfig } from "@/services/priceService";
+import { CONFIG } from "@/lib/config";
 
 interface DashboardData {
   currentTemp: number;
@@ -27,6 +29,63 @@ const Dashboard = () => {
     automation: true,
     lastUpdate: new Date(),
   });
+  const [loading, setLoading] = useState(false);
+
+  // Fetch live price data for current hour
+  const fetchCurrentPrice = async () => {
+    try {
+      setLoading(true);
+      
+      const now = new Date();
+      const startOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+      const endOfHour = new Date(startOfHour.getTime() + 60 * 60 * 1000);
+
+      const config: PriceProviderConfig = {
+        biddingZone: CONFIG.biddingZone,
+        currency: CONFIG.currency,
+        timezone: CONFIG.timezone,
+      };
+
+      const prices = await fetchPrices(CONFIG.priceProvider, config, startOfHour, endOfHour);
+      
+      if (prices.length > 0) {
+        const currentPrice = prices[0];
+        
+        // Get historical prices for classification
+        const yesterday = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const historicalPrices = await fetchPrices(CONFIG.priceProvider, config, yesterday, now);
+        
+        const rollingAvg = calculateRollingAverage(historicalPrices, CONFIG.rollingDays);
+        const priceState = classifyPrice(currentPrice.value, rollingAvg, CONFIG.priceMethod, CONFIG);
+        
+        setData(prev => ({
+          ...prev,
+          currentPrice: currentPrice.value,
+          priceState,
+          lastUpdate: new Date(),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch current price:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load and periodic refresh
+  useEffect(() => {
+    fetchCurrentPrice();
+    
+    // Refresh every 30 minutes
+    const interval = setInterval(fetchCurrentPrice, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh when provider changes
+  useEffect(() => {
+    fetchCurrentPrice();
+  }, [CONFIG.priceProvider, CONFIG.biddingZone]);
 
   const handleAutomationToggle = (enabled: boolean) => {
     setData(prev => ({ ...prev, automation: enabled }));
@@ -108,7 +167,9 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="metric-label">Current Price</p>
-              <p className="metric-display">{data.currentPrice} SEK/kWh</p>
+              <p className="metric-display">
+                {loading ? '...' : data.currentPrice.toFixed(3)} SEK/kWh
+              </p>
               <Badge className={`mt-2 ${getPriceStateColor(data.priceState)}`}>
                 {getPriceStateLabel(data.priceState)}
               </Badge>
@@ -116,6 +177,11 @@ const Dashboard = () => {
             <div className="p-3 bg-warning/10 rounded-full">
               <Zap className="h-6 w-6 text-warning" />
             </div>
+          </div>
+          <div className="mt-2">
+            <p className="text-xs text-muted-foreground">
+              {CONFIG.priceProvider} • {CONFIG.biddingZone}
+            </p>
           </div>
         </Card>
 
@@ -143,7 +209,7 @@ const Dashboard = () => {
         {/* Price Chart */}
         <Card className="status-card">
           <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">24-Hour Price Overview</h3>
+            <h3 className="text-lg font-semibold mb-4">Live Price Data</h3>
             <PriceChart />
           </div>
         </Card>
