@@ -27,6 +27,7 @@ import {
   Activity
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LivePriceTest } from "@/components/integrations/LivePriceTest";
 
 interface IntegrationStatus {
   connected: boolean;
@@ -161,7 +162,7 @@ const Integrations = () => {
 
       <Tabs defaultValue="nordpool" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="nordpool">Price Data</TabsTrigger>
+          <TabsTrigger value="nordpool">Live Price Data</TabsTrigger>
           <TabsTrigger value="heatpump">Heat Pump Control</TabsTrigger>
         </TabsList>
 
@@ -175,111 +176,16 @@ const Integrations = () => {
                     <Zap className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">Price Data Configuration</h3>
-                    <p className="text-sm text-muted-foreground">Free electricity price data via ENTSO-E</p>
+                    <h3 className="text-lg font-semibold">Elpriset Just Nu</h3>
+                    <p className="text-sm text-muted-foreground">Free Swedish electricity prices</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <StatusBadge status={nordPoolStatus} />
-                  <Switch
-                    checked={nordPoolConfig.enabled}
-                    onCheckedChange={(enabled) => 
-                      setNordPoolConfig(prev => ({ ...prev, enabled }))
-                    }
-                  />
                 </div>
               </div>
 
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="price-provider">Price Data Source</Label>
-                <Select defaultValue="mock">
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mock">Mock Data (Demo)</SelectItem>
-                    <SelectItem value="elpriset">Elpriset Just Nu (Free Swedish)</SelectItem>
-                    <SelectItem value="entsoe">ENTSO-E Transparency (Free EU)</SelectItem>
-                    <SelectItem value="nordpool" disabled>Nord Pool (Commercial)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="entsoe-token">ENTSO-E API Token (Optional)</Label>
-                <Input
-                  id="entsoe-token"
-                  type="password"
-                  placeholder="Get free token from transparency.entsoe.eu"
-                  className="bg-background/50"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Only required for ENTSO-E provider. Elpriset Just Nu requires no API key.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="market-area">Bidding Zone</Label>
-                <Select defaultValue="SE3">
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SE1">SE1 - Northern Sweden</SelectItem>
-                    <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
-                    <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
-                    <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="currency">Currency</Label>
-                <Select defaultValue="SEK">
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EUR">EUR (from ENTSO-E)</SelectItem>
-                    <SelectItem value="SEK">SEK (auto-converted)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="eur-sek-rate">EUR/SEK Exchange Rate</Label>
-                <Input
-                  id="eur-sek-rate"
-                  type="number"
-                  step="0.01"
-                  defaultValue="11.50"
-                  className="bg-background/50"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Elpriset Just Nu provides free Swedish prices. ENTSO-E requires API token but covers all EU zones.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="timezone">Timezone</Label>
-                <Select defaultValue="Europe/Stockholm">
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Europe/Stockholm">Europe/Stockholm</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => {
-                  // Test price fetch
-                  console.log('Testing price fetch...');
-                }}
-              >
-                <TestTube className="w-4 h-4 mr-2" />
-                Test Price Fetch
-              </Button>
-            </div>
+              <LivePriceTest />
             </div>
           </Card>
         </TabsContent>
