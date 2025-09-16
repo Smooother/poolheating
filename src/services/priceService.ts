@@ -199,11 +199,115 @@ export class NordPoolAdapter implements PriceProvider {
   }
 }
 
+// ElprisetJustNu Adapter (Free Swedish prices)
+export class ElprisetJustNuAdapter implements PriceProvider {
+  name = 'Elpriset Just Nu (Free Swedish)';
+  private baseUrl = 'https://www.elprisetjustnu.se/api/v1/prices';
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      // Test with a recent date to check if service is available
+      const testDate = new Date();
+      testDate.setDate(testDate.getDate() - 1); // Yesterday should be available
+      const dateStr = this.formatDate(testDate);
+      const response = await fetch(`${this.baseUrl}/${testDate.getFullYear()}/${dateStr}_SE3.json`, { method: 'HEAD' });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async fetchPrices(start: Date, end: Date, config: PriceProviderConfig): Promise<PricePoint[]> {
+    const biddingZone = SWEDISH_BIDDING_ZONES.find(zone => zone.code === config.biddingZone);
+    if (!biddingZone) {
+      throw new Error(`Invalid bidding zone: ${config.biddingZone}`);
+    }
+
+    const points: PricePoint[] = [];
+    const currentDate = new Date(start);
+    
+    // Fetch data for each day in the range
+    while (currentDate <= end) {
+      try {
+        const dateStr = this.formatDate(currentDate);
+        const year = currentDate.getFullYear();
+        const url = `${this.baseUrl}/${year}/${dateStr}_${config.biddingZone}.json`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`ElprisetJustNu: No data available for ${dateStr} ${config.biddingZone}`);
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
+        }
+
+        const data = await response.json();
+        const dayPoints = this.parseApiResponse(data, config);
+        
+        // Filter points within the requested time range
+        const filteredPoints = dayPoints.filter(point => 
+          point.start >= start && point.start <= end
+        );
+        
+        points.push(...filteredPoints);
+      } catch (error) {
+        console.warn(`ElprisetJustNu: Failed to fetch data for ${this.formatDate(currentDate)}:`, error);
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return points.sort((a, b) => a.start.getTime() - b.start.getTime());
+  }
+
+  private formatDate(date: Date): string {
+    // Format as MM-DD for API endpoint
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${month}-${day}`;
+  }
+
+  private parseApiResponse(data: any[], config: PriceProviderConfig): PricePoint[] {
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid API response format');
+    }
+
+    return data.map(item => {
+      const start = new Date(item.time_start);
+      const end = new Date(item.time_end);
+      
+      // Use the appropriate currency based on config
+      let value: number;
+      let currency: string;
+      
+      if (config.currency === 'EUR') {
+        value = item.EUR_per_kWh;
+        currency = 'EUR';
+      } else {
+        value = item.SEK_per_kWh;
+        currency = 'SEK';
+      }
+
+      // Determine resolution based on time difference
+      const duration = end.getTime() - start.getTime();
+      const resolution: Resolution = duration === 15 * 60 * 1000 ? 'PT15M' : 'PT60M';
+
+      return {
+        start,
+        end,
+        value,
+        currency,
+        resolution
+      };
+    });
+  }
+}
+
 // Price Provider Factory
 export class PriceProviderFactory {
   private providers: Map<string, PriceProvider> = new Map([
     ['mock', new MockPriceAdapter()],
     ['entsoe', new EntsoeAdapter()],
+    ['elpriset', new ElprisetJustNuAdapter()],
     ['nordpool', new NordPoolAdapter()],
   ]);
 

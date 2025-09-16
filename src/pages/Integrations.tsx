@@ -199,13 +199,14 @@ const Integrations = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mock">Mock Data (Demo)</SelectItem>
-                    <SelectItem value="entsoe">ENTSO-E Transparency (Free)</SelectItem>
+                    <SelectItem value="elpriset">Elpriset Just Nu (Free Swedish)</SelectItem>
+                    <SelectItem value="entsoe">ENTSO-E Transparency (Free EU)</SelectItem>
                     <SelectItem value="nordpool" disabled>Nord Pool (Commercial)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="entsoe-token">ENTSO-E API Token</Label>
+                <Label htmlFor="entsoe-token">ENTSO-E API Token (Optional)</Label>
                 <Input
                   id="entsoe-token"
                   type="password"
@@ -213,7 +214,7 @@ const Integrations = () => {
                   className="bg-background/50"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Free API access for European electricity market data
+                  Only required for ENTSO-E provider. Elpriset Just Nu requires no API key.
                 </p>
               </div>
               <div>
@@ -252,7 +253,7 @@ const Integrations = () => {
                   className="bg-background/50"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Used for EUR to SEK conversion when currency is set to SEK
+                  Elpriset Just Nu provides free Swedish prices. ENTSO-E requires API token but covers all EU zones.
                 </p>
               </div>
               <div>

@@ -1,6 +1,6 @@
 export const CONFIG = {
   // Price data source settings
-  priceProvider: 'mock' as 'mock' | 'entsoe' | 'nordpool',
+  priceProvider: 'mock' as 'mock' | 'entsoe' | 'elpriset' | 'nordpool',
   biddingZone: 'SE3',
   currency: 'SEK' as 'EUR' | 'SEK',
   timezone: 'Europe/Stockholm',
