@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,50 +21,21 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface ControlSettings {
-  baseSetpoint: number;
-  lowPriceOffset: number;
-  highPriceOffset: number;
-  hysteresis: number;
-  antiShortCycle: number;
-  maxChangePerHour: number;
-  minTemp: number;
-  maxTemp: number;
-  thresholdMethod: 'delta' | 'percentile';
-  deltaPercent: number;
-  percentileLow: number;
-  percentileHigh: number;
-  rollingDays: number;
-}
+import { useSettings } from "@/contexts/SettingsContext";
 
 const Control = () => {
   const { toast } = useToast();
-  const [settings, setSettings] = useState<ControlSettings>({
-    baseSetpoint: 28.0,
-    lowPriceOffset: 2.0,
-    highPriceOffset: 2.0,
-    hysteresis: 0.4,
-    antiShortCycle: 30,
-    maxChangePerHour: 2.0,
-    minTemp: 20.0,
-    maxTemp: 32.0,
-    thresholdMethod: 'delta',
-    deltaPercent: 15,
-    percentileLow: 30,
-    percentileHigh: 70,
-    rollingDays: 7,
-  });
+  const { settings, updateSetting, resetToDefaults, saveSettings } = useSettings();
 
-  const handleSettingChange = <K extends keyof ControlSettings>(
+  const handleSettingChange = <K extends keyof typeof settings>(
     key: K,
-    value: ControlSettings[K]
+    value: typeof settings[K]
   ) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    updateSetting(key, value);
   };
 
   const handleSaveSettings = () => {
-    // Here you would save to backend/localStorage
+    saveSettings();
     toast({
       title: "Settings Saved",
       description: "Control parameters have been updated successfully.",
@@ -73,21 +43,7 @@ const Control = () => {
   };
 
   const handleResetDefaults = () => {
-    setSettings({
-      baseSetpoint: 28.0,
-      lowPriceOffset: 2.0,
-      highPriceOffset: 2.0,
-      hysteresis: 0.4,
-      antiShortCycle: 30,
-      maxChangePerHour: 2.0,
-      minTemp: 20.0,
-      maxTemp: 32.0,
-      thresholdMethod: 'delta',
-      deltaPercent: 15,
-      percentileLow: 30,
-      percentileHigh: 70,
-      rollingDays: 7,
-    });
+    resetToDefaults();
     toast({
       title: "Settings Reset",
       description: "All parameters have been reset to defaults.",

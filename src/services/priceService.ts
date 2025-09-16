@@ -325,17 +325,41 @@ export class PriceProviderFactory {
 }
 
 // Updated utility functions for new PricePoint interface
-export function calculateRollingAverage(prices: PricePoint[], days: number): number {
-  if (prices.length === 0) return 0;
+export function calculateRollingAverage(prices: PricePoint[], days: number): { average: number, actualDays: number } {
+  if (prices.length === 0) return { average: 0, actualDays: 0 };
   
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
   
   const recentPrices = prices.filter(p => p.start >= cutoffDate);
-  if (recentPrices.length === 0) return 0;
+  
+  // If we don't have enough data for the requested days, use all available data
+  let actualDays = days;
+  if (recentPrices.length === 0) {
+    // Use all available prices if no recent data
+    const allPrices = prices.slice();
+    if (allPrices.length === 0) return { average: 0, actualDays: 0 };
+    
+    // Calculate how many days of data we actually have
+    const oldestPrice = Math.min(...allPrices.map(p => p.start.getTime()));
+    const newestPrice = Math.max(...allPrices.map(p => p.start.getTime()));
+    const availableDays = Math.ceil((newestPrice - oldestPrice) / (24 * 60 * 60 * 1000)) + 1;
+    actualDays = Math.min(days, availableDays);
+    
+    const sum = allPrices.reduce((acc, p) => acc + p.value, 0);
+    return { average: sum / allPrices.length, actualDays };
+  }
+  
+  // Calculate actual days of data we have
+  if (recentPrices.length > 0) {
+    const oldestRecent = Math.min(...recentPrices.map(p => p.start.getTime()));
+    const newestRecent = Math.max(...recentPrices.map(p => p.start.getTime()));
+    const availableDays = Math.ceil((newestRecent - oldestRecent) / (24 * 60 * 60 * 1000)) + 1;
+    actualDays = Math.min(days, availableDays);
+  }
   
   const sum = recentPrices.reduce((acc, p) => acc + p.value, 0);
-  return sum / recentPrices.length;
+  return { average: sum / recentPrices.length, actualDays };
 }
 
 export function classifyPrice(currentPrice: number, rollingAverage: number, method: 'percent' | 'percentile', config: any): 'low' | 'normal' | 'high' {

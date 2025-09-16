@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { fetchPrices, classifyPrice, calculateRollingAverage, PriceProviderConfig } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface ForecastPoint {
   time: string;
@@ -17,7 +18,12 @@ interface WeatherData {
   description: string;
 }
 
-export const TargetForecast = () => {
+interface TargetForecastProps {
+  biddingZone: string;
+}
+
+export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
+  const { settings } = useSettings();
   const [forecastData, setForecastData] = useState<ForecastPoint[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,10 +51,10 @@ export const TargetForecast = () => {
     // Price-based adjustment
     switch (priceState) {
       case 'low':
-        adjustment += CONFIG.lowPriceOffsetC; // +2°C when prices are low
+        adjustment += settings.lowPriceOffset; // Boost when prices are low
         break;
       case 'high':
-        adjustment += CONFIG.highPriceOffsetC; // -2°C when prices are high
+        adjustment -= settings.highPriceOffset; // Reduce when prices are high
         break;
       default:
         adjustment = 0; // No adjustment for normal prices
@@ -64,7 +70,7 @@ export const TargetForecast = () => {
     const targetTemp = baseTemp + adjustment;
     
     // Apply safety limits
-    return Math.max(CONFIG.minTempC, Math.min(CONFIG.maxTempC, targetTemp));
+    return Math.max(settings.minTemp, Math.min(settings.maxTemp, targetTemp));
   };
 
   const fetchForecastData = async () => {
@@ -78,24 +84,29 @@ export const TargetForecast = () => {
       const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       
       const config: PriceProviderConfig = {
-        biddingZone: CONFIG.biddingZone,
+        biddingZone: biddingZone,
         currency: CONFIG.currency,
         timezone: CONFIG.timezone,
       };
 
       const prices = await fetchPrices(CONFIG.priceProvider, config, now, next24h);
       
-      // Calculate rolling average for price classification
-      const rollingAvg = calculateRollingAverage(prices, CONFIG.rollingDays);
+      // Calculate rolling average for price classification with adaptive days
+      const { average: rollingAvg } = calculateRollingAverage(prices, settings.rollingDays);
       
       // Create forecast data points
       const forecast: ForecastPoint[] = prices
         .filter(price => price.start >= now) // Only future prices
         .slice(0, 24) // Next 24 hours
         .map(price => {
-          const priceState = classifyPrice(price.value, rollingAvg, CONFIG.priceMethod, CONFIG);
+          const priceState = classifyPrice(
+            price.value, 
+            rollingAvg, 
+            settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', 
+            settings
+          );
           const targetTemp = calculateTargetTemperature(
-            CONFIG.baseSetpointC, 
+            settings.baseSetpoint, 
             priceState,
             weather.temperature
           );
@@ -128,7 +139,7 @@ export const TargetForecast = () => {
     const interval = setInterval(fetchForecastData, 30 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [biddingZone, settings.rollingDays, settings.thresholdMethod, settings.deltaPercent, settings.percentileLow, settings.percentileHigh, settings.baseSetpoint, settings.lowPriceOffset, settings.highPriceOffset, settings.minTemp, settings.maxTemp]);
 
   const getLineColor = (dataKey: string) => {
     return 'hsl(var(--accent))';
@@ -199,7 +210,7 @@ export const TargetForecast = () => {
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
               fontSize={11}
-              domain={[CONFIG.minTempC, CONFIG.maxTempC]}
+              domain={[settings.minTemp, settings.maxTemp]}
               tickFormatter={(value) => `${value}°C`}
               label={{ value: 'Temperature °C', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
             />
@@ -213,7 +224,7 @@ export const TargetForecast = () => {
               }}
             />
             <ReferenceLine 
-              y={CONFIG.baseSetpointC} 
+              y={settings.baseSetpoint} 
               stroke="hsl(var(--muted-foreground))" 
               strokeDasharray="5 5"
               label={{ value: "Base temp", position: "top", fontSize: 10 }}
@@ -239,7 +250,7 @@ export const TargetForecast = () => {
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
-            <span className="text-muted-foreground">Base Setpoint ({CONFIG.baseSetpointC}°C)</span>
+            <span className="text-muted-foreground">Base Setpoint ({settings.baseSetpoint}°C)</span>
           </div>
         </div>
         <div className="text-muted-foreground">
@@ -251,7 +262,7 @@ export const TargetForecast = () => {
       <div className="grid grid-cols-3 gap-4 text-xs">
         <div className="text-center p-2 bg-success/5 rounded border border-success/20">
           <div className="font-medium text-success">Low Price</div>
-          <div className="text-muted-foreground">+{CONFIG.lowPriceOffsetC}°C boost</div>
+          <div className="text-muted-foreground">+{settings.lowPriceOffset}°C boost</div>
         </div>
         <div className="text-center p-2 bg-muted/5 rounded border border-border">
           <div className="font-medium">Normal Price</div>
@@ -259,7 +270,7 @@ export const TargetForecast = () => {
         </div>
         <div className="text-center p-2 bg-destructive/5 rounded border border-destructive/20">
           <div className="font-medium text-destructive">High Price</div>
-          <div className="text-muted-foreground">{CONFIG.highPriceOffsetC}°C save</div>
+          <div className="text-muted-foreground">-{settings.highPriceOffset}°C save</div>
         </div>
       </div>
     </div>

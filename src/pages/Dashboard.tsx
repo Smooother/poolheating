@@ -68,7 +68,7 @@ const Dashboard = () => {
         const yesterday = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const historicalPrices = await fetchPrices(CONFIG.priceProvider, config, yesterday, now);
         
-        const rollingAvg = calculateRollingAverage(historicalPrices, CONFIG.rollingDays);
+        const { average: rollingAvg } = calculateRollingAverage(historicalPrices, CONFIG.rollingDays);
         const priceState = classifyPrice(currentPrice.value, rollingAvg, CONFIG.priceMethod, CONFIG);
         
         setData(prev => ({
@@ -256,7 +256,7 @@ const Dashboard = () => {
         <Card className="status-card">
           <div className="p-6">
             <h3 className="text-lg font-semibold mb-4">Temperature Forecast</h3>
-            <TargetForecast />
+            <TargetForecast biddingZone={currentBiddingZone} />
           </div>
         </Card>
       </div>

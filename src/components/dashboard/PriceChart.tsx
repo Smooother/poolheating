@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Refe
 import { fetchPrices, calculateRollingAverage, PricePoint, PriceProviderConfig } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
 import { useToast } from '@/hooks/use-toast';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface ChartDataPoint {
   time: string;
@@ -17,10 +18,12 @@ interface PriceChartProps {
 
 export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceChartProps) => {
   const { toast } = useToast();
+  const { settings } = useSettings();
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [averagePrice, setAveragePrice] = useState(0);
+  const [actualDays, setActualDays] = useState(0);
 
   const fetchLivePriceData = async () => {
     try {
@@ -42,8 +45,9 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       const prices = await fetchPrices(CONFIG.priceProvider, config, today, tomorrow);
       
       // Calculate rolling average for reference line
-      const avgPrice = calculateRollingAverage(prices, CONFIG.rollingDays);
+      const { average: avgPrice, actualDays: usedDays } = calculateRollingAverage(prices, settings.rollingDays);
       setAveragePrice(avgPrice);
+      setActualDays(usedDays);
 
       // Transform data for chart
       const transformedData: ChartDataPoint[] = prices
@@ -94,7 +98,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   // Refresh when provider or config changes
   useEffect(() => {
     fetchLivePriceData();
-  }, [CONFIG.priceProvider, currentBiddingZone]);
+  }, [CONFIG.priceProvider, currentBiddingZone, settings.rollingDays]);
 
   const formatTooltipValue = (value: number, name: string) => {
     return [`${value.toFixed(3)} SEK/kWh`, 'Price'];
@@ -195,7 +199,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 y={averagePrice} 
                 stroke="hsl(var(--muted-foreground))" 
                 strokeDasharray="5 5"
-                label={{ value: `${CONFIG.rollingDays}d avg`, position: "top", fontSize: 10 }}
+                label={{ value: `${actualDays}d avg`, position: "top", fontSize: 10 }}
               />
             )}
             <Line 
@@ -219,7 +223,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         {averagePrice > 0 && (
           <div className="flex items-center space-x-2">
             <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
-            <span className="text-muted-foreground">{CONFIG.rollingDays}-day Average</span>
+            <span className="text-muted-foreground">{actualDays}-day Average</span>
           </div>
         )}
       </div>
