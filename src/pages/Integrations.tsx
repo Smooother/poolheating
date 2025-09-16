@@ -23,7 +23,8 @@ import {
   XCircle,
   AlertTriangle,
   Wifi,
-  Cloud
+  Cloud,
+  Activity
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -160,11 +161,11 @@ const Integrations = () => {
 
       <Tabs defaultValue="nordpool" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="nordpool">Nord Pool Prices</TabsTrigger>
+          <TabsTrigger value="nordpool">Price Data</TabsTrigger>
           <TabsTrigger value="heatpump">Heat Pump Control</TabsTrigger>
         </TabsList>
 
-        {/* Nord Pool Configuration */}
+        {/* Price Data Configuration */}
         <TabsContent value="nordpool" className="space-y-6">
           <Card className="status-card">
             <div className="p-6 space-y-6">
@@ -174,8 +175,8 @@ const Integrations = () => {
                     <Zap className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">Nord Pool Configuration</h3>
-                    <p className="text-sm text-muted-foreground">Electricity price data source</p>
+                    <h3 className="text-lg font-semibold">Price Data Configuration</h3>
+                    <p className="text-sm text-muted-foreground">Free electricity price data via ENTSO-E</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -189,118 +190,95 @@ const Integrations = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>API URL</Label>
-                    <Input
-                      value={nordPoolConfig.apiUrl}
-                      onChange={(e) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        apiUrl: e.target.value 
-                      }))}
-                      placeholder="https://api.nordpoolgroup.com/api"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>API Key (Optional)</Label>
-                    <Input
-                      type="password"
-                      value={nordPoolConfig.apiKey}
-                      onChange={(e) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        apiKey: e.target.value 
-                      }))}
-                      placeholder="Enter API key if required"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Market Area</Label>
-                    <Select
-                      value={nordPoolConfig.area}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        area: value 
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SE1">SE1 - Luleå</SelectItem>
-                        <SelectItem value="SE2">SE2 - Sundsvall</SelectItem>
-                        <SelectItem value="SE3">SE3 - Stockholm</SelectItem>
-                        <SelectItem value="SE4">SE4 - Malmö</SelectItem>
-                        <SelectItem value="NO1">NO1 - Oslo</SelectItem>
-                        <SelectItem value="NO2">NO2 - Kristiansand</SelectItem>
-                        <SelectItem value="DK1">DK1 - West Denmark</SelectItem>
-                        <SelectItem value="DK2">DK2 - East Denmark</SelectItem>
-                        <SelectItem value="FI">FI - Finland</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={nordPoolConfig.currency}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        currency: value 
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SEK">SEK - Swedish Krona</SelectItem>
-                        <SelectItem value="NOK">NOK - Norwegian Krone</SelectItem>
-                        <SelectItem value="DKK">DKK - Danish Krone</SelectItem>
-                        <SelectItem value="EUR">EUR - Euro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Timezone</Label>
-                    <Select
-                      value={nordPoolConfig.timezone}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        timezone: value 
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Europe/Stockholm">Europe/Stockholm</SelectItem>
-                        <SelectItem value="Europe/Oslo">Europe/Oslo</SelectItem>
-                        <SelectItem value="Europe/Copenhagen">Europe/Copenhagen</SelectItem>
-                        <SelectItem value="Europe/Helsinki">Europe/Helsinki</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {nordPoolStatus.lastSync && (
-                    <div className="pt-2">
-                      <Label className="text-xs text-muted-foreground">Last Sync</Label>
-                      <p className="text-sm">{nordPoolStatus.lastSync.toLocaleString()}</p>
-                    </div>
-                  )}
-                </div>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="price-provider">Price Data Source</Label>
+                <Select defaultValue="mock">
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mock">Mock Data (Demo)</SelectItem>
+                    <SelectItem value="entsoe">ENTSO-E Transparency (Free)</SelectItem>
+                    <SelectItem value="nordpool" disabled>Nord Pool (Commercial)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="flex justify-end space-x-3">
-                <Button variant="outline" onClick={handleTestNordPool}>
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Test Connection
-                </Button>
+              <div>
+                <Label htmlFor="entsoe-token">ENTSO-E API Token</Label>
+                <Input
+                  id="entsoe-token"
+                  type="password"
+                  placeholder="Get free token from transparency.entsoe.eu"
+                  className="bg-background/50"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Free API access for European electricity market data
+                </p>
               </div>
+              <div>
+                <Label htmlFor="market-area">Bidding Zone</Label>
+                <Select defaultValue="SE3">
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SE1">SE1 - Northern Sweden</SelectItem>
+                    <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
+                    <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
+                    <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="currency">Currency</Label>
+                <Select defaultValue="SEK">
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EUR">EUR (from ENTSO-E)</SelectItem>
+                    <SelectItem value="SEK">SEK (auto-converted)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="eur-sek-rate">EUR/SEK Exchange Rate</Label>
+                <Input
+                  id="eur-sek-rate"
+                  type="number"
+                  step="0.01"
+                  defaultValue="11.50"
+                  className="bg-background/50"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for EUR to SEK conversion when currency is set to SEK
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="timezone">Timezone</Label>
+                <Select defaultValue="Europe/Stockholm">
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Europe/Stockholm">Europe/Stockholm</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  // Test price fetch
+                  console.log('Testing price fetch...');
+                }}
+              >
+                <TestTube className="w-4 h-4 mr-2" />
+                Test Price Fetch
+              </Button>
+            </div>
             </div>
           </Card>
         </TabsContent>
