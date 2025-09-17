@@ -163,7 +163,7 @@ const Integrations = () => {
 
       <Tabs defaultValue="nordpool" className="space-y-6">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
-          <TabsTrigger value="nordpool" className="text-sm">Live Price Data</TabsTrigger>
+          <TabsTrigger value="nordpool" className="text-sm">Price Data</TabsTrigger>
           <TabsTrigger value="heatpump" className="text-sm">Heat Pump Control</TabsTrigger>
         </TabsList>
 
@@ -189,19 +189,6 @@ const Integrations = () => {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>API URL</Label>
-                    <Input
-                      value={nordPoolConfig.apiUrl}
-                      onChange={(e) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        apiUrl: e.target.value 
-                      }))}
-                      placeholder="https://api.nordpoolgroup.com/api"
-                      disabled
-                      className="bg-muted text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label>Bidding Zone</Label>
                     <Select
                       value={nordPoolConfig.area}
@@ -218,27 +205,6 @@ const Integrations = () => {
                         <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
                         <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
                         <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={nordPoolConfig.currency}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        currency: value 
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SEK">Swedish Krona (SEK)</SelectItem>
-                        <SelectItem value="EUR">Euro (EUR)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

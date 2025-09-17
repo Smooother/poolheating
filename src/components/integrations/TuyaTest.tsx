@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { tuyaService } from '@/services/tuyaService';
 import { TuyaAdapter } from '@/services/TuyaAdapter';
@@ -18,6 +20,7 @@ export const TuyaTest = () => {
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
   const [adapterStatus, setAdapterStatus] = useState<any>(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [config, setConfig] = useState({
     clientId: '',
     clientSecret: '',
@@ -214,69 +217,79 @@ export const TuyaTest = () => {
   return (
     <div className="space-y-6">
       {/* Configuration Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tuya Cloud Configuration</CardTitle>
-          <CardDescription>
-            Configure your Tuya Cloud credentials to connect to your heat pump device
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="clientId">Client ID</Label>
-              <Input
-                id="clientId"
-                type="text"
-                value={config.clientId}
-                onChange={(e) => setConfig({...config, clientId: e.target.value})}
-                placeholder="Enter Client ID"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="clientSecret">Client Secret</Label>
-              <Input
-                id="clientSecret"
-                type="password"
-                value={config.clientSecret}
-                onChange={(e) => setConfig({...config, clientSecret: e.target.value})}
-                placeholder="Enter Client Secret"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="uid">UID</Label>
-              <Input
-                id="uid"
-                type="text"
-                value={config.uid}
-                onChange={(e) => setConfig({...config, uid: e.target.value})}
-                placeholder="euXXXXXXXXXXXX"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="deviceId">Device ID</Label>
-              <Input
-                id="deviceId"
-                type="text"
-                value={config.deviceId}
-                onChange={(e) => setConfig({...config, deviceId: e.target.value})}
-                placeholder="bfXXXXXXXXXXXX"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={updateConfig} size="sm">
-              Save Configuration
-            </Button>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              Status: 
-              <Badge variant={isConfigured ? "default" : "destructive"}>
-                {isConfigured ? 'Configured' : 'Not Configured'}
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Tuya Cloud Configuration</CardTitle>
+                  <CardDescription>
+                    Configure your Tuya Cloud credentials to connect to your heat pump device
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={isConfigured ? "default" : "destructive"}>
+                    {isConfigured ? 'Configured' : 'Not Configured'}
+                  </Badge>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isConfigOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="clientId">Client ID</Label>
+                  <Input
+                    id="clientId"
+                    type="text"
+                    value={config.clientId}
+                    onChange={(e) => setConfig({...config, clientId: e.target.value})}
+                    placeholder="Enter Client ID"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clientSecret">Client Secret</Label>
+                  <Input
+                    id="clientSecret"
+                    type="password"
+                    value={config.clientSecret}
+                    onChange={(e) => setConfig({...config, clientSecret: e.target.value})}
+                    placeholder="Enter Client Secret"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="uid">UID</Label>
+                  <Input
+                    id="uid"
+                    type="text"
+                    value={config.uid}
+                    onChange={(e) => setConfig({...config, uid: e.target.value})}
+                    placeholder="euXXXXXXXXXXXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="deviceId">Device ID</Label>
+                  <Input
+                    id="deviceId"
+                    type="text"
+                    value={config.deviceId}
+                    onChange={(e) => setConfig({...config, deviceId: e.target.value})}
+                    placeholder="bfXXXXXXXXXXXX"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={updateConfig} size="sm">
+                  Save Configuration
+                </Button>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Test Card */}
       <Card>
