@@ -4,9 +4,10 @@ import App from "./App.tsx";
 import "./index.css";
 import { SettingsProvider } from "./contexts/SettingsContext.tsx";
 
-// Test Tuya connection on startup
+// Test Tuya connection and start monitoring on startup
 import { tuyaService } from "./services/tuyaService";
 import { triggerPriceCollection } from "./services/priceDataService";
+import { HeatPumpStatusService } from "./services/heatPumpStatusService";
 
 // Test Tuya connection
 tuyaService.testConnection().then((connected) => {
@@ -24,6 +25,17 @@ triggerPriceCollection().then(() => {
   console.log('✅ Automatic price data collection started');
 }).catch((error) => {
   console.error('❌ Automatic price data collection failed:', error);
+});
+
+// Automatically start heat pump monitoring on startup
+HeatPumpStatusService.triggerStatusUpdate().then((success) => {
+  if (success) {
+    console.log('✅ Heat pump monitoring started successfully');
+  } else {
+    console.warn('⚠️ Heat pump monitoring failed to start - check Tuya configuration');
+  }
+}).catch((error) => {
+  console.error('❌ Heat pump monitoring startup error:', error);
 });
 
 createRoot(document.getElementById("root")!).render(
