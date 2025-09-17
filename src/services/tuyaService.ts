@@ -1,4 +1,4 @@
-import CryptoJS from 'crypto-js';
+import { supabase } from '@/integrations/supabase/client';
 
 // Tuya Cloud Configuration
 const getTuyaConfig = () => {
@@ -96,251 +96,36 @@ class TuyaCloudService {
   }
 
   /**
-   * Generate signature for Tuya API requests
+   * Make request through Supabase Edge Function
    */
-  private generateSignature(
-    clientId: string,
-    timestamp: string,
-    nonce: string,
-    stringToSign: string,
-    clientSecret: string,
-    accessToken?: string
-  ): string {
-    // For token requests (no accessToken), use: clientId + timestamp + nonce + stringToSign
-    // For other requests (with accessToken), use: clientId + accessToken + timestamp + nonce + stringToSign
-    const str = clientId + (accessToken || '') + timestamp + nonce + stringToSign;
-    return CryptoJS.HmacSHA256(str, clientSecret).toString(CryptoJS.enc.Hex).toUpperCase();
-  }
+  private async makeProxyRequest(action: string, commands?: any): Promise<any> {
+    if (!this.isConfigured()) {
+      throw new Error('Tuya configuration incomplete. Please configure all required fields.');
+    }
 
-  /**
-   * Generate headers for Tuya API requests
-   */
-  private generateHeaders(method: string, path: string, body?: any, accessToken?: string) {
-    const timestamp = Date.now().toString();
-    const nonce = Math.random().toString(36).substring(2, 15);
-    
-    // Generate content hash (empty for GET requests)
-    const contentHash = CryptoJS.SHA256(body ? JSON.stringify(body) : '').toString(CryptoJS.enc.Hex);
-    
-    // Build stringToSign exactly like Postman script
-    const stringToSign = [method, contentHash, '', path].join('\n');
-
-    const signature = this.generateSignature(
-      this.config.clientId,
-      timestamp,
-      nonce,
-      stringToSign,
-      this.config.clientSecret,
-      accessToken
-    );
-
-    return {
-      'Content-Type': 'application/json',
-      'client_id': this.config.clientId,
-      't': timestamp,
-      'sign_method': 'HMAC-SHA256',
-      'nonce': nonce,
-      'sign': signature,
-      ...(accessToken && { 'access_token': accessToken })
-    };
-  }
-
-  /**
-   * Make authenticated request to Tuya API
-   */
-  private async makeRequest(method: string, path: string, body?: any): Promise<any> {
-    const token = await this.getValidToken();
-    const headers = this.generateHeaders(method, path, body, token.access_token);
-    
     try {
-      const response = await fetch(`${this.config.baseUrl}${path}`, {
-        method,
-        headers,
-        mode: 'cors',
-        ...(body && { body: JSON.stringify(body) })
+      const { data, error } = await supabase.functions.invoke('tuya-proxy', {
+        body: {
+          action,
+          uid: this.config.uid,
+          deviceId: this.config.deviceId,
+          commands
+        }
       });
 
-      // Check if the response is ok and not blocked by CORS
-      if (!response.ok) {
-        if (response.status === 0) {
-          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. This requires a backend service.');
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (error) {
+        throw new Error(`Proxy error: ${error.message}`);
       }
 
-      const data = await response.json();
-
       if (!data.success) {
-        // If token expired, try to refresh and retry once
-        if (data.code === 1010) {
-          await this.refreshToken();
-          const newToken = await this.getValidToken();
-          const newHeaders = this.generateHeaders(method, path, body, newToken.access_token);
-          
-          const retryResponse = await fetch(`${this.config.baseUrl}${path}`, {
-            method,
-            headers: newHeaders,
-            mode: 'cors',
-            ...(body && { body: JSON.stringify(body) })
-          });
-
-          if (!retryResponse.ok) {
-            throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
-          }
-
-          const retryData = await retryResponse.json();
-          if (!retryData.success) {
-            throw new Error(`Tuya API Error: ${retryData.msg} (Code: ${retryData.code})`);
-          }
-          return retryData;
-        }
-        throw new Error(`Tuya API Error: ${data.msg} (Code: ${data.code})`);
+        throw new Error(`Tuya API Error: ${data.msg || 'Unknown error'} (Code: ${data.code || 'UNKNOWN'})`);
       }
 
       return data;
     } catch (error: any) {
-      // Handle network errors (CORS, etc.)
-      if (error.name === 'TypeError' && error.message === 'Load failed') {
-        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. The Tuya Cloud API does not allow direct browser access due to CORS restrictions. You need a backend service or proxy to make these API calls.');
-      }
+      console.error('Tuya proxy request failed:', error);
       throw error;
     }
-  }
-
-  /**
-   * Get access token from Tuya Cloud
-   */
-  private async getAccessToken(): Promise<TuyaToken> {
-    const path = '/v1.0/token?grant_type=1';
-    const headers = this.generateHeaders('GET', path);
-
-    try {
-      const response = await fetch(`${this.config.baseUrl}${path}`, {
-        method: 'GET',
-        headers,
-        mode: 'cors'
-      });
-
-      if (!response.ok) {
-        if (response.status === 0) {
-          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. This requires a backend service.');
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(`Failed to get Tuya token: ${data.msg} (Code: ${data.code})`);
-      }
-
-      const token: TuyaToken = {
-        access_token: data.result.access_token,
-        refresh_token: data.result.refresh_token,
-        expires_in: data.result.expire_time,
-        expires_at: Date.now() + (data.result.expire_time * 1000)
-      };
-
-      // Store token in localStorage
-      localStorage.setItem(this.tokenKey, JSON.stringify(token));
-      this.token = token;
-
-      return token;
-    } catch (error: any) {
-      if (error.name === 'TypeError' && error.message === 'Load failed') {
-        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. The Tuya Cloud API does not allow direct browser access due to CORS restrictions. You need a backend service or proxy to make these API calls.');
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Refresh access token
-   */
-  private async refreshToken(): Promise<TuyaToken> {
-    const currentToken = this.getStoredToken();
-    if (!currentToken?.refresh_token) {
-      return this.getAccessToken();
-    }
-
-    const path = `/v1.0/token/${currentToken.refresh_token}`;
-    const headers = this.generateHeaders('GET', path);
-
-    try {
-      const response = await fetch(`${this.config.baseUrl}${path}`, {
-        method: 'GET',
-        headers,
-        mode: 'cors'
-      });
-
-      if (!response.ok) {
-        if (response.status === 0) {
-          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser.');
-        }
-        // If refresh fails, get new token
-        return this.getAccessToken();
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        // If refresh fails, get new token
-        return this.getAccessToken();
-      }
-
-      const token: TuyaToken = {
-        access_token: data.result.access_token,
-        refresh_token: data.result.refresh_token,
-        expires_in: data.result.expire_time,
-        expires_at: Date.now() + (data.result.expire_time * 1000)
-      };
-
-      localStorage.setItem(this.tokenKey, JSON.stringify(token));
-      this.token = token;
-
-      return token;
-    } catch (error: any) {
-      if (error.name === 'TypeError' && error.message === 'Load failed') {
-        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser.');
-      }
-      // If refresh fails, get new token
-      return this.getAccessToken();
-    }
-  }
-
-  /**
-   * Get stored token from localStorage
-   */
-  private getStoredToken(): TuyaToken | null {
-    try {
-      const stored = localStorage.getItem(this.tokenKey);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (error) {
-      console.error('Error parsing stored token:', error);
-    }
-    return null;
-  }
-
-  /**
-   * Get a valid token (refresh if needed)
-   */
-  private async getValidToken(): Promise<TuyaToken> {
-    let token = this.token || this.getStoredToken();
-
-    if (!token) {
-      return this.getAccessToken();
-    }
-
-    // Check if token is about to expire (refresh 5 minutes before expiry)
-    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
-    if (token.expires_at < fiveMinutesFromNow) {
-      return this.refreshToken();
-    }
-
-    this.token = token;
-    return token;
   }
 
   /**
@@ -362,9 +147,8 @@ class TuyaCloudService {
         deviceId: this.config.deviceId
       });
       
-      const token = await this.getValidToken();
+      await this.makeProxyRequest('test');
       console.log('✅ Tuya Cloud connection successful');
-      console.log('Access token:', token.access_token.substring(0, 20) + '...');
       return true;
     } catch (error) {
       console.error('❌ Tuya Cloud connection failed:', error);
@@ -376,8 +160,7 @@ class TuyaCloudService {
    * Get device information
    */
   async getDeviceInfo(): Promise<TuyaDeviceInfo> {
-    const path = `/v1.0/devices/${this.config.deviceId}`;
-    const data = await this.makeRequest('GET', path);
+    const data = await this.makeProxyRequest('getDeviceInfo');
     return data.result;
   }
 
@@ -385,8 +168,7 @@ class TuyaCloudService {
    * Get device status
    */
   async getDeviceStatus(): Promise<TuyaDeviceStatus[]> {
-    const path = `/v1.0/devices/${this.config.deviceId}/status`;
-    const data = await this.makeRequest('GET', path);
+    const data = await this.makeProxyRequest('getDeviceStatus');
     return data.result;
   }
 
@@ -394,11 +176,8 @@ class TuyaCloudService {
    * Send command to device
    */
   async sendCommand(commands: { code: string; value: any }[]): Promise<boolean> {
-    const path = `/v1.0/devices/${this.config.deviceId}/commands`;
-    const body = { commands };
-
     try {
-      await this.makeRequest('POST', path, body);
+      await this.makeProxyRequest('sendCommand', commands);
       return true;
     } catch (error) {
       console.error('Failed to send command:', error);
