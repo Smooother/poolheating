@@ -87,9 +87,28 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       // Find current price point for marker
       const currentTime = new Date();
       const currentHour = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), currentTime.getHours());
-      const currentData = transformedData.find(point => 
-        Math.abs(point.timestamp.getTime() - currentHour.getTime()) < 30 * 60 * 1000 // Within 30 minutes
-      );
+      
+      // Look for data point that matches current hour or is closest to current time
+      let currentData = transformedData.find(point => {
+        const pointHour = new Date(point.timestamp.getFullYear(), point.timestamp.getMonth(), point.timestamp.getDate(), point.timestamp.getHours());
+        return pointHour.getTime() === currentHour.getTime();
+      });
+      
+      // If no exact match, find the closest data point to current time
+      if (!currentData && transformedData.length > 0) {
+        currentData = transformedData.reduce((closest, point) => {
+          const pointDiff = Math.abs(point.timestamp.getTime() - currentTime.getTime());
+          const closestDiff = Math.abs(closest.timestamp.getTime() - currentTime.getTime());
+          return pointDiff < closestDiff ? point : closest;
+        });
+        
+        // Only use if within 2 hours of current time
+        const timeDiff = Math.abs(currentData.timestamp.getTime() - currentTime.getTime());
+        if (timeDiff > 2 * 60 * 60 * 1000) {
+          currentData = undefined;
+        }
+      }
+      
       setCurrentPriceData(currentData || null);
 
       setChartData(transformedData);

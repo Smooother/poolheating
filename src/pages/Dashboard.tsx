@@ -331,7 +331,7 @@ const Dashboard = () => {
         {/* Live Price Chart - Full Width */}
         <Card className="status-card">
           <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Live Price Data</h3>
+            <h3 className="text-lg font-semibold mb-4">Electricity Price</h3>
             <PriceChart currentBiddingZone={settings.biddingZone} />
           </div>
         </Card>
