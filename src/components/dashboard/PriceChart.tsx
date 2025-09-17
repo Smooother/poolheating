@@ -141,8 +141,11 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   };
 
   const formatXAxisTick = (tickItem: string, index: number) => {
-    // Show fewer ticks to avoid crowding
-    if (index % 4 === 0) {
+    // Show fewer ticks on mobile to avoid crowding
+    const isMobile = window.innerWidth < 640; // sm breakpoint
+    const interval = isMobile ? 6 : 4;
+    
+    if (index % interval === 0) {
       return tickItem;
     }
     return '';
@@ -162,14 +165,15 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   return (
     <div className="space-y-4">
       {/* Header with status */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-medium">Today & Tomorrow Prices</h4>
           <p className="text-xs text-muted-foreground">
-            {chartData.length} hours • {CONFIG.priceProvider} • {currentBiddingZone}
+            <span className="block sm:inline">{chartData.length} hours • {CONFIG.priceProvider}</span>
+            <span className="block sm:inline sm:ml-1">• {currentBiddingZone}</span>
           </p>
         </div>
-        <div className="text-right">
+        <div className="text-left sm:text-right">
           {lastUpdate && (
             <p className="text-xs text-muted-foreground">
               Updated: {lastUpdate.toLocaleTimeString('sv-SE')}
@@ -185,9 +189,9 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         </div>
       </div>
 
-      <div className="h-64">
+      <div className="h-48 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
@@ -199,17 +203,18 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
             <XAxis 
               dataKey="time" 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
               tickFormatter={formatXAxisTick}
               angle={-45}
               textAnchor="end"
-              height={60}
+              height={50}
+              interval="preserveStartEnd"
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
               tickFormatter={(value) => `${value.toFixed(2)}`}
-              label={{ value: 'SEK/kWh', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+              width={50}
             />
             <Tooltip 
               formatter={formatTooltipValue}
@@ -218,6 +223,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 backgroundColor: 'hsl(var(--background))',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                fontSize: '12px',
               }}
             />
             {averagePrice > 0 && (
@@ -225,7 +231,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 y={averagePrice} 
                 stroke="hsl(var(--muted-foreground))" 
                 strokeDasharray="5 5"
-                label={{ value: `${actualDays}d avg`, position: "top", fontSize: 10 }}
+                label={{ value: `${actualDays}d avg`, position: "top", fontSize: 9 }}
               />
             )}
             <Area 
@@ -235,14 +241,14 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               strokeWidth={2}
               fill="url(#priceGradient)"
               dot={false}
-              activeDot={{ r: 5, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
+              activeDot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {/* Legend */}
-      <div className="flex items-center justify-center space-x-6 text-xs">
+      <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-6 text-xs">
         <div className="flex items-center space-x-2">
           <div className="w-3 h-0.5 bg-primary"></div>
           <span className="text-muted-foreground">Electricity Price</span>
