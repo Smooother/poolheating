@@ -16,6 +16,7 @@ export const TuyaTest = () => {
   const [results, setResults] = useState<any>(null);
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
   const [adapterStatus, setAdapterStatus] = useState<any>(null);
+  const [isConfigured, setIsConfigured] = useState(false);
   const [config, setConfig] = useState({
     clientId: '',
     clientSecret: '',
@@ -24,13 +25,29 @@ export const TuyaTest = () => {
   });
 
   useEffect(() => {
-    // Load existing config
+    // Load existing config and check status
     const loadConfig = async () => {
-      const existingConfig = await tuyaService.getConfig();
-      setConfig(existingConfig);
+      try {
+        const existingConfig = await tuyaService.getConfig();
+        setConfig(existingConfig);
+        const configured = await tuyaService.isConfigured();
+        setIsConfigured(configured);
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      }
     };
     loadConfig();
   }, []);
+
+  // Function to refresh configuration status
+  const refreshConfigStatus = async () => {
+    try {
+      const configured = await tuyaService.isConfigured();
+      setIsConfigured(configured);
+    } catch (error) {
+      console.error('Failed to check config status:', error);
+    }
+  };
 
   const updateConfig = async () => {
     if (!config.clientId || !config.clientSecret || !config.uid || !config.deviceId) {
@@ -44,6 +61,7 @@ export const TuyaTest = () => {
 
     try {
       await tuyaService.updateConfig(config);
+      await refreshConfigStatus(); // Refresh status after saving
       toast({
         title: "Configuration Updated",
         description: "Tuya configuration has been saved successfully",
@@ -249,7 +267,12 @@ export const TuyaTest = () => {
             <Button onClick={updateConfig} size="sm">
               Save Configuration
             </Button>
-            <ConfigStatus />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              Status: 
+              <Badge variant={isConfigured ? "default" : "destructive"}>
+                {isConfigured ? 'Configured' : 'Not Configured'}
+              </Badge>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -264,7 +287,27 @@ export const TuyaTest = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
-            <TestButtons testing={testing} onTestConnection={testTuyaConnection} onTestAdapter={testAdapterConnection} onTestTemperature={testTemperatureSet} />
+            <Button 
+              onClick={testTuyaConnection} 
+              disabled={testing || !isConfigured}
+              variant="outline"
+            >
+              {testing ? 'Testing...' : 'Test Connection'}
+            </Button>
+            <Button 
+              onClick={testAdapterConnection} 
+              disabled={testing || !isConfigured}
+              variant="outline"
+            >
+              {testing ? 'Testing...' : 'Test Adapter'}
+            </Button>
+            <Button 
+              onClick={testTemperatureSet} 
+              disabled={testing || !isConfigured}
+              variant="outline"
+            >
+              {testing ? 'Setting...' : 'Test Set Temperature'}
+            </Button>
           </div>
 
           {results && (
@@ -382,71 +425,5 @@ export const TuyaTest = () => {
         </CardContent>
       </Card>
     </div>
-  );
-};
-
-// Helper component for configuration status
-const ConfigStatus = () => {
-  const [isConfigured, setIsConfigured] = useState(false);
-
-  useEffect(() => {
-    const checkConfig = async () => {
-      const configured = await tuyaService.isConfigured();
-      setIsConfigured(configured);
-    };
-    checkConfig();
-  }, []);
-
-  return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      Status: 
-      <Badge variant={isConfigured ? "default" : "destructive"}>
-        {isConfigured ? 'Configured' : 'Not Configured'}
-      </Badge>
-    </div>
-  );
-};
-
-// Helper component for test buttons
-const TestButtons = ({ testing, onTestConnection, onTestAdapter, onTestTemperature }: {
-  testing: boolean;
-  onTestConnection: () => void;
-  onTestAdapter: () => void;
-  onTestTemperature: () => void;
-}) => {
-  const [isConfigured, setIsConfigured] = useState(false);
-
-  useEffect(() => {
-    const checkConfig = async () => {
-      const configured = await tuyaService.isConfigured();
-      setIsConfigured(configured);
-    };
-    checkConfig();
-  }, []);
-
-  return (
-    <>
-      <Button 
-        onClick={onTestConnection} 
-        disabled={testing || !isConfigured}
-        variant="outline"
-      >
-        {testing ? 'Testing...' : 'Test Connection'}
-      </Button>
-      <Button 
-        onClick={onTestAdapter} 
-        disabled={testing || !isConfigured}
-        variant="outline"
-      >
-        {testing ? 'Testing...' : 'Test Adapter'}
-      </Button>
-      <Button 
-        onClick={onTestTemperature} 
-        disabled={testing || !isConfigured}
-        variant="outline"
-      >
-        {testing ? 'Setting...' : 'Test Set Temperature'}
-      </Button>
-    </>
   );
 };
