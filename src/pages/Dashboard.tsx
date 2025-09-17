@@ -37,6 +37,67 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(false);
   
+  // Set up real-time heat pump status updates
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    
+    const setupRealTimeUpdates = () => {
+      unsubscribe = HeatPumpStatusService.subscribeToStatusChanges((newStatus) => {
+        if (newStatus) {
+          setData(prev => ({
+            ...prev,
+            heatPump: newStatus,
+            lastUpdate: new Date()
+          }));
+        }
+      });
+    };
+    
+    setupRealTimeUpdates();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  const handlePowerToggle = async (powerOn: boolean) => {
+    try {
+      // Optimistically update the UI immediately
+      setData(prev => ({
+        ...prev,
+        heatPump: prev.heatPump ? {
+          ...prev.heatPump,
+          power_status: powerOn ? 'on' : 'off'
+        } : null
+      }));
+      
+      // Send command to heat pump
+      await HeatPumpCommandService.setPowerState(powerOn);
+      
+      toast({
+        title: powerOn ? "Heat Pump Turned On" : "Heat Pump Turned Off",
+        description: `Heat pump power ${powerOn ? 'enabled' : 'disabled'} successfully`,
+      });
+      
+      // Trigger status refresh after a short delay
+      setTimeout(() => {
+        HeatPumpStatusService.triggerStatusUpdate();
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error('Error sending power command:', error);
+      toast({
+        title: "Power Command Failed",
+        description: error.message || "Failed to send power command to heat pump",
+        variant: "destructive",
+      });
+      
+      // Revert the optimistic update on error
+      HeatPumpStatusService.triggerStatusUpdate();
+    }
+  };
 
   const handleBiddingZoneChange = (zone: string) => {
     updateSetting('biddingZone', zone);
@@ -237,6 +298,11 @@ const Dashboard = () => {
               <span className="text-sm font-medium">Automation</span>
             </div>
             <div className="flex items-center space-x-2">
+              <Switch 
+                checked={data.heatPump?.power_status === 'on'}
+                onCheckedChange={handlePowerToggle}
+                disabled={!data.heatPump || !HeatPumpStatusService.isDeviceOnline(data.heatPump)}
+              />
               <div className={`w-3 h-3 rounded-full ${
                 data.heatPump?.power_status === 'on' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-success animate-pulse' :
                 data.heatPump?.power_status === 'standby' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-warning' : 'bg-muted-foreground'
