@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createHmac } from "node:crypto";
+import { createHmac, createHash } from "node:crypto";
 
 interface TuyaConfig {
   clientId: string;
@@ -40,7 +40,7 @@ function generateSignature(
 ): string {
   const signStr = [
     method.toUpperCase(),
-    createHmac('sha256', secret).update(body).digest('hex'),
+    createHash('sha256').update(body || '').digest('hex'),
     '',
     path
   ].join('\n');
@@ -62,15 +62,16 @@ function generateHeaders(
   
   const sign = generateSignature(clientId, secret, timestamp, nonce, method, path, body, accessToken);
   
-  return {
+  const headersObj: Record<string, string> = {
     'client_id': clientId,
-    'access_token': accessToken,
     'sign': sign,
     't': timestamp,
     'sign_method': 'HMAC-SHA256',
     'nonce': nonce,
     'Content-Type': 'application/json'
   };
+  if (accessToken) headersObj['access_token'] = accessToken;
+  return headersObj;
 }
 
 async function getStoredToken(): Promise<TuyaToken | null> {
