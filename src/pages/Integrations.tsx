@@ -186,6 +186,98 @@ const Integrations = () => {
                 </div>
               </div>
 
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>API URL</Label>
+                    <Input
+                      value={nordPoolConfig.apiUrl}
+                      onChange={(e) => setNordPoolConfig(prev => ({ 
+                        ...prev, 
+                        apiUrl: e.target.value 
+                      }))}
+                      placeholder="https://api.nordpoolgroup.com/api"
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Bidding Zone</Label>
+                    <Select
+                      value={nordPoolConfig.area}
+                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
+                        ...prev, 
+                        area: value 
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SE1">SE1 - Northern Sweden</SelectItem>
+                        <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
+                        <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
+                        <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select
+                      value={nordPoolConfig.currency}
+                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
+                        ...prev, 
+                        currency: value 
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SEK">Swedish Krona (SEK)</SelectItem>
+                        <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Timezone</Label>
+                    <Select
+                      value={nordPoolConfig.timezone}
+                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
+                        ...prev, 
+                        timezone: value 
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Europe/Stockholm">Europe/Stockholm</SelectItem>
+                        <SelectItem value="Europe/Helsinki">Europe/Helsinki</SelectItem>
+                        <SelectItem value="Europe/Oslo">Europe/Oslo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {nordPoolStatus.lastSync && (
+                  <div className="pt-2">
+                    <Label className="text-xs text-muted-foreground">Last Update</Label>
+                    <p className="text-sm">{nordPoolStatus.lastSync.toLocaleString()}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3">
+                  <Button variant="outline" onClick={handleTestNordPool}>
+                    <TestTube className="h-4 w-4 mr-2" />
+                    Test Connection
+                  </Button>
+                </div>
+              </div>
+
               <LivePriceTest />
             </div>
           </Card>

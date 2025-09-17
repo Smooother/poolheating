@@ -219,31 +219,6 @@ const Dashboard = () => {
 
       {/* Charts Section - Stacked Vertically */}
       <div className="space-y-6">
-        {/* Price Data Controls */}
-        <Card className="status-card">
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Price Data Controls</h3>
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium">Bidding Zone:</label>
-                  <Select defaultValue={CONFIG.biddingZone} onValueChange={handleBiddingZoneChange}>
-                    <SelectTrigger className="w-32 bg-background border-border z-50">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border shadow-lg z-50">
-                      <SelectItem value="SE1">SE1 - Northern</SelectItem>
-                      <SelectItem value="SE2">SE2 - Central</SelectItem>
-                      <SelectItem value="SE3">SE3 - Southern</SelectItem>
-                      <SelectItem value="SE4">SE4 - Malmö</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
         {/* Live Price Chart - Full Width */}
         <Card className="status-card">
           <div className="p-6">
