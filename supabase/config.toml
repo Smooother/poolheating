@@ -1,4 +1,30 @@
 project_id = "bagcdhlbkicwtepflczr"
 
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://bagcdhlbkicwtepflczr.supabase.co"]
+jwt_expiry = 3600
+inactivity_timeout = 0
+refresh_token_rotation_enabled = true
+persist_session = true
+
+[db]
+port = 54322
+major_version = 15
+
+[functions.daily-price-collector]
+verify_jwt = false
+
 [functions.tuya-proxy]
 verify_jwt = false
+
+[edge-runtime]
+policy = "per-worker"

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
-import { fetchPrices, calculateRollingAverage, PricePoint, PriceProviderConfig } from '@/services/priceService';
+import { fetchStoredPrices, getLatestPriceDate } from '@/services/priceDataService';
+import { calculateRollingAverage } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -35,14 +36,8 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 2); // Include full tomorrow
 
-      const config: PriceProviderConfig = {
-        biddingZone: currentBiddingZone,
-        currency: CONFIG.currency,
-        timezone: CONFIG.timezone,
-      };
-
-      // Fetch price data
-      const prices = await fetchPrices(CONFIG.priceProvider, config, today, tomorrow);
+      // Fetch price data from Supabase
+      const prices = await fetchStoredPrices(currentBiddingZone, today, tomorrow);
       
       // Calculate rolling average for reference line
       const { average: avgPrice, actualDays: usedDays } = calculateRollingAverage(prices, settings.rollingDays);
@@ -118,10 +113,10 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   // Refresh when provider or config changes
   useEffect(() => {
     fetchLivePriceData();
-  }, [CONFIG.priceProvider, currentBiddingZone, settings.rollingDays]);
+  }, [currentBiddingZone, settings.rollingDays]);
 
   const formatTooltipValue = (value: number, name: string) => {
-    return [`${value.toFixed(3)} SEK/kWh`, 'Price'];
+    return [`${(value * 100).toFixed(1)} öre/kWh`, 'Price'];
   };
 
   const formatTooltipLabel = (label: string, payload: any[]) => {
@@ -169,7 +164,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         <div>
           <h4 className="text-sm font-medium">Today & Tomorrow Prices</h4>
           <p className="text-xs text-muted-foreground">
-            <span className="block sm:inline">{chartData.length} hours • {CONFIG.priceProvider}</span>
+            <span className="block sm:inline">{chartData.length} hours • Prices in öre/kWh</span>
             <span className="block sm:inline sm:ml-1">• {currentBiddingZone}</span>
           </p>
         </div>
@@ -213,7 +208,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
               fontSize={10}
-              tickFormatter={(value) => `${value.toFixed(2)}`}
+              tickFormatter={(value) => `${(value * 100).toFixed(0)}`}
               width={50}
             />
             <Tooltip 

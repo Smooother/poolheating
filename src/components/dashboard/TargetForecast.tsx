@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
-import { fetchPrices, classifyPrice, calculateRollingAverage, PriceProviderConfig } from '@/services/priceService';
-import { CONFIG } from '@/lib/config';
+import { fetchStoredPrices } from '@/services/priceDataService';
+import { classifyPrice, calculateRollingAverage } from '@/services/priceService';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface ForecastPoint {
@@ -79,18 +79,17 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       
       const weather = await fetchWeatherData();
       
-      // Get price forecast for next 24 hours
+      // Get price forecast for next 24 hours from Supabase
       const now = new Date();
       const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       
-      const config: PriceProviderConfig = {
-        biddingZone: biddingZone,
-        currency: CONFIG.currency,
-        timezone: CONFIG.timezone,
-      };
-
-      const prices = await fetchPrices(CONFIG.priceProvider, config, now, next24h);
+      const prices = await fetchStoredPrices(biddingZone, now, next24h);
       
+      if (prices.length === 0) {
+        console.warn('No price data available for forecast');
+        return;
+      }
+
       // Calculate rolling average for price classification with adaptive days
       const { average: rollingAvg } = calculateRollingAverage(prices, settings.rollingDays);
       
@@ -156,7 +155,7 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
         month: 'short', 
         day: 'numeric' 
       });
-      const priceInfo = `${data.actualPrice.toFixed(3)} SEK/kWh (${data.priceState})`;
+      const priceInfo = `${(data.actualPrice * 100).toFixed(1)} öre/kWh (${data.priceState})`;
       return [`${date} ${label}`, priceInfo];
     }
     return label;

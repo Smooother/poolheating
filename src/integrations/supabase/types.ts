@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      price_data: {
+        Row: {
+          bidding_zone: string
+          created_at: string
+          currency: string
+          end_time: string
+          id: string
+          price_value: number
+          provider: string
+          resolution: string
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          bidding_zone: string
+          created_at?: string
+          currency?: string
+          end_time: string
+          id?: string
+          price_value: number
+          provider?: string
+          resolution?: string
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          bidding_zone?: string
+          created_at?: string
+          currency?: string
+          end_time?: string
+          id?: string
+          price_value?: number
+          provider?: string
+          resolution?: string
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tuya_config: {
         Row: {
           client_id: string
