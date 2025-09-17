@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      tuya_config: {
+        Row: {
+          client_id: string
+          client_secret: string
+          created_at: string
+          device_id: string
+          dp_mode_code: string
+          dp_power_code: string
+          dp_settemp_code: string
+          dp_silent_code: string
+          id: string
+          uid: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          device_id?: string
+          dp_mode_code?: string
+          dp_power_code?: string
+          dp_settemp_code?: string
+          dp_silent_code?: string
+          id?: string
+          uid?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          device_id?: string
+          dp_mode_code?: string
+          dp_power_code?: string
+          dp_settemp_code?: string
+          dp_silent_code?: string
+          id?: string
+          uid?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tuya_tokens: {
         Row: {
           access_token: string

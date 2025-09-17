@@ -18,6 +18,11 @@ export class TuyaAdapter extends HeatPumpAdapter {
     try {
       console.log('🔌 TuyaAdapter: Connecting to Tuya Cloud...');
       
+      const isConfigured = await tuyaService.isConfigured();
+      if (!isConfigured) {
+        throw new Error('Tuya service not configured');
+      }
+      
       const connected = await tuyaService.testConnection();
       if (!connected) {
         throw new Error('Failed to connect to Tuya Cloud');

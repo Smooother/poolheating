@@ -1,8 +1,34 @@
 import { supabase } from '@/integrations/supabase/client';
 
 // Tuya Cloud Configuration
-const getTuyaConfig = () => {
-  // Try to get from localStorage first
+const getTuyaConfig = async () => {
+  try {
+    // Try to get from Supabase first
+    const { data, error } = await supabase
+      .from('tuya_config')
+      .select('*')
+      .eq('id', 'default')
+      .single();
+
+    if (data && !error) {
+      return {
+        baseUrl: 'https://openapi.tuyaeu.com',
+        clientId: data.client_id || '',
+        clientSecret: data.client_secret || '',
+        uid: data.uid || '',
+        deviceId: data.device_id || '',
+        // DP codes
+        powerCode: data.dp_power_code || 'Power',
+        setTempCode: data.dp_settemp_code || 'SetTemp',
+        modeCode: data.dp_mode_code || 'SetMode',
+        silentCode: data.dp_silent_code || 'SilentMdoe'
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to load Tuya config from database, falling back to localStorage:', error);
+  }
+
+  // Fallback to localStorage
   const storedConfig = localStorage.getItem('tuya_config');
   if (storedConfig) {
     try {
@@ -39,7 +65,18 @@ const getTuyaConfig = () => {
   };
 };
 
-const TUYA_CONFIG = getTuyaConfig();
+// Initialize config as empty - will be loaded async
+let TUYA_CONFIG = {
+  baseUrl: 'https://openapi.tuyaeu.com',
+  clientId: '',
+  clientSecret: '',
+  uid: '',
+  deviceId: '',
+  powerCode: 'Power',
+  setTempCode: 'SetTemp',
+  modeCode: 'SetMode',
+  silentCode: 'SilentMdoe'
+};
 
 interface TuyaToken {
   access_token: string;
@@ -63,19 +100,63 @@ interface TuyaDeviceInfo {
 class TuyaCloudService {
   private token: TuyaToken | null = null;
   private tokenKey = 'tuya_token';
-  private config = getTuyaConfig();
+  private config = TUYA_CONFIG;
+  private configLoaded = false;
+
+  /**
+   * Load configuration from database
+   */
+  private async loadConfig(): Promise<void> {
+    if (this.configLoaded) return;
+    
+    try {
+      this.config = await getTuyaConfig();
+      this.configLoaded = true;
+    } catch (error) {
+      console.error('Failed to load Tuya config:', error);
+    }
+  }
 
   /**
    * Update Tuya configuration
    */
-  updateConfig(config: {
+  async updateConfig(config: {
     clientId: string;
     clientSecret: string;
     uid: string;
     deviceId: string;
-  }): void {
-    localStorage.setItem('tuya_config', JSON.stringify(config));
-    this.config = getTuyaConfig();
+  }): Promise<void> {
+    try {
+      // Save to Supabase database first
+      const { error } = await supabase
+        .from('tuya_config')
+        .upsert({
+          id: 'default',
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          uid: config.uid,
+          device_id: config.deviceId
+        });
+
+      if (error) {
+        console.error('Failed to save config to database:', error);
+        // Fallback to localStorage
+        localStorage.setItem('tuya_config', JSON.stringify(config));
+      }
+    } catch (error) {
+      console.error('Database save failed, using localStorage:', error);
+      localStorage.setItem('tuya_config', JSON.stringify(config));
+    }
+
+    // Update local config
+    this.config = {
+      ...this.config,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      uid: config.uid,
+      deviceId: config.deviceId
+    };
+    
     // Clear existing token when config changes
     this.token = null;
     localStorage.removeItem(this.tokenKey);
@@ -84,14 +165,16 @@ class TuyaCloudService {
   /**
    * Get current configuration
    */
-  getConfig() {
+  async getConfig() {
+    await this.loadConfig();
     return { ...this.config };
   }
 
   /**
    * Check if configuration is complete
    */
-  isConfigured(): boolean {
+  async isConfigured(): Promise<boolean> {
+    await this.loadConfig();
     return !!(this.config.clientId && this.config.clientSecret && this.config.uid && this.config.deviceId);
   }
 
@@ -99,7 +182,8 @@ class TuyaCloudService {
    * Make request through Supabase Edge Function
    */
   private async makeProxyRequest(action: string, commands?: any): Promise<any> {
-    if (!this.isConfigured()) {
+    await this.loadConfig();
+    if (!(await this.isConfigured())) {
       throw new Error('Tuya configuration incomplete. Please configure all required fields.');
     }
 
@@ -133,7 +217,7 @@ class TuyaCloudService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      if (!this.isConfigured()) {
+      if (!(await this.isConfigured())) {
         console.error('❌ Tuya Cloud configuration incomplete');
         return false;
       }
