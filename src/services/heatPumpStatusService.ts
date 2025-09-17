@@ -56,8 +56,7 @@ export class HeatPumpStatusService {
   static async triggerStatusUpdate(): Promise<boolean> {
     try {
       const { data, error } = await supabase.functions.invoke('heat-pump-monitor', {
-        body: {},
-        method: 'GET'
+        body: { action: 'monitor' }
       });
 
       if (error) {
@@ -65,7 +64,7 @@ export class HeatPumpStatusService {
         return false;
       }
 
-      return data?.success || false;
+      return (data as any)?.success === true;
     } catch (error) {
       console.error('Error triggering status update:', error);
       return false;

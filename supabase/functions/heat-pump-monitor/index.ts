@@ -29,7 +29,7 @@ async function fetchTuyaDeviceData(supabase: any): Promise<TuyaDeviceData | null
     // Get Tuya configuration
     const { data: config } = await supabase
       .from('tuya_config')
-      .select('device_id')
+      .select('device_id, uid')
       .eq('id', 'default')
       .single();
 
@@ -42,6 +42,7 @@ async function fetchTuyaDeviceData(supabase: any): Promise<TuyaDeviceData | null
     const { data: deviceData, error } = await supabase.functions.invoke('tuya-proxy', {
       body: { 
         action: 'getDeviceStatus',
+        uid: config.uid,
         deviceId: config.device_id
       }
     });

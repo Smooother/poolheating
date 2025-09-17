@@ -112,6 +112,8 @@ const Dashboard = () => {
   // Initial load and periodic refresh
   useEffect(() => {
     fetchCurrentPrice();
+    // Trigger a status update immediately on load
+    HeatPumpStatusService.triggerStatusUpdate();
     fetchHeatPumpStatus();
     
     // Refresh prices every 30 minutes
