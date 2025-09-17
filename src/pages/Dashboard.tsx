@@ -53,13 +53,33 @@ const Dashboard = () => {
         // First update local setting
         updateSetting('baseSetpoint', newTemp);
         
-        // Then send command to heat pump
+        // Optimistically update the UI immediately
+        setData(prev => ({
+          ...prev,
+          heatPump: prev.heatPump ? {
+            ...prev.heatPump,
+            target_temp: newTemp
+          } : null
+        }));
+        
+        // Send command to heat pump
         await HeatPumpCommandService.setTargetTemperature(newTemp);
         
         toast({
           title: "Temperature Updated",
           description: `Target temperature set to ${newTemp}°C and sent to heat pump`,
         });
+        
+        // Trigger status refresh after a short delay to get updated pump speed
+        setTimeout(() => {
+          HeatPumpStatusService.triggerStatusUpdate();
+        }, 2000);
+        
+        // And another refresh after 10 seconds to ensure we get the pump response
+        setTimeout(() => {
+          HeatPumpStatusService.triggerStatusUpdate();
+        }, 10000);
+        
       } catch (error: any) {
         console.error('Error sending temperature command:', error);
         toast({
@@ -67,6 +87,18 @@ const Dashboard = () => {
           description: error.message || "Failed to send temperature command to heat pump",
           variant: "destructive",
         });
+        
+        // Revert the optimistic update on error
+        const { data: config } = await supabase
+          .from('tuya_config')
+          .select('device_id, uid')
+          .eq('id', 'default')
+          .single();
+          
+        if (config) {
+          // Trigger a status refresh to get the actual current state
+          HeatPumpStatusService.triggerStatusUpdate();
+        }
       }
     }
   };
@@ -244,25 +276,22 @@ const Dashboard = () => {
                 {data.heatPump ? `${data.heatPump.target_temp}°C` : `${settings.baseSetpoint}°C`}
               </p>
             </div>
-            <div className="flex items-center justify-center space-x-3">
+            <div className="flex items-center justify-center space-x-4">
               <Button
                 variant="outline" 
                 size="sm"
-                onClick={() => handleTargetTempChange(settings.baseSetpoint - 1)}
-                disabled={settings.baseSetpoint <= settings.minTemp}
-                className="h-8 w-8 p-0"
+                onClick={() => handleTargetTempChange((data.heatPump?.target_temp || settings.baseSetpoint) - 1)}
+                disabled={(data.heatPump?.target_temp || settings.baseSetpoint) <= settings.minTemp}
+                className="h-10 w-10 p-0 rounded-full"
               >
                 <Minus className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-medium min-w-[3rem] text-center">
-                {settings.baseSetpoint}°C
-              </span>
               <Button
                 variant="outline" 
                 size="sm"
-                onClick={() => handleTargetTempChange(settings.baseSetpoint + 1)}
-                disabled={settings.baseSetpoint >= settings.maxTemp}
-                className="h-8 w-8 p-0"
+                onClick={() => handleTargetTempChange((data.heatPump?.target_temp || settings.baseSetpoint) + 1)}
+                disabled={(data.heatPump?.target_temp || settings.baseSetpoint) >= settings.maxTemp}
+                className="h-10 w-10 p-0 rounded-full"
               >
                 <Plus className="h-4 w-4" />
               </Button>
