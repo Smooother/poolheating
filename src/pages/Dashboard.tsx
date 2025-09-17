@@ -14,6 +14,8 @@ import { calculateRollingAverage, classifyPrice } from "@/services/priceService"
 import { useSettings } from "@/contexts/SettingsContext";
 import { CONFIG } from "@/lib/config";
 import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatusService";
+import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardData {
   heatPump: HeatPumpStatus | null;
@@ -45,13 +47,27 @@ const Dashboard = () => {
     fetchCurrentPrice();
   };
 
-  const handleTargetTempChange = (newTemp: number) => {
+  const handleTargetTempChange = async (newTemp: number) => {
     if (newTemp >= settings.minTemp && newTemp <= settings.maxTemp) {
-      updateSetting('baseSetpoint', newTemp);
-      toast({
-        title: "Target Temperature Updated",
-        description: `New target: ${newTemp}°C`,
-      });
+      try {
+        // First update local setting
+        updateSetting('baseSetpoint', newTemp);
+        
+        // Then send command to heat pump
+        await HeatPumpCommandService.setTargetTemperature(newTemp);
+        
+        toast({
+          title: "Temperature Updated",
+          description: `Target temperature set to ${newTemp}°C and sent to heat pump`,
+        });
+      } catch (error: any) {
+        console.error('Error sending temperature command:', error);
+        toast({
+          title: "Command Failed",
+          description: error.message || "Failed to send temperature command to heat pump",
+          variant: "destructive",
+        });
+      }
     }
   };
 

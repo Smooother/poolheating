@@ -38,14 +38,21 @@ function generateSignature(
   body: string = '',
   accessToken: string = ''
 ): string {
+  // Create content hash (SHA256 of body)
+  const contentHash = createHash('sha256').update(body || '').digest('hex');
+  
+  // stringToSign = METHOD \n contentHash \n \n pathQuery
   const signStr = [
     method.toUpperCase(),
-    createHash('sha256').update(body || '').digest('hex'),
+    contentHash,
     '',
     path
   ].join('\n');
   
+  // BUSINESS signature: clientId + access_token + t + nonce + stringToSign
   const stringToSign = clientId + accessToken + timestamp + nonce + signStr;
+  
+  // HMAC-SHA256 (uppercase hex)
   return createHmac('sha256', secret).update(stringToSign).digest('hex').toUpperCase();
 }
 
@@ -70,7 +77,11 @@ function generateHeaders(
     'nonce': nonce,
     'Content-Type': 'application/json'
   };
-  if (accessToken) headersObj['access_token'] = accessToken;
+  
+  if (accessToken) {
+    headersObj['access_token'] = accessToken;
+  }
+  
   return headersObj;
 }
 
@@ -98,12 +109,15 @@ async function getAccessToken(config: TuyaConfig): Promise<string> {
   const path = '/v1.0/token?grant_type=1';
   const headers = generateHeaders(config.clientId, config.clientSecret, 'GET', path);
   
+  console.log('Getting new access token...');
+  
   const response = await fetch(`${TUYA_BASE_URL}${path}`, {
     method: 'GET',
     headers
   });
   
   const data = await response.json();
+  console.log('Token response:', data);
   
   if (!data.success) {
     throw new Error(`Tuya API error: ${data.msg || 'Unknown error'}`);
@@ -123,10 +137,13 @@ async function getAccessToken(config: TuyaConfig): Promise<string> {
 async function getValidToken(config: TuyaConfig): Promise<string> {
   const storedToken = await getStoredToken();
   
+  // Check if token exists and is not expired (with 5 minute buffer)
   if (storedToken && storedToken.expires_at > Date.now() + 300000) {
+    console.log('Using cached access token');
     return storedToken.access_token;
   }
   
+  console.log('Getting new access token');
   return await getAccessToken(config);
 }
 
@@ -140,13 +157,24 @@ async function makeAuthenticatedRequest(
   const bodyStr = body ? JSON.stringify(body) : '';
   const headers = generateHeaders(config.clientId, config.clientSecret, method, path, bodyStr, accessToken);
   
+  console.log(`Making ${method} request to ${path}`);
+  console.log('Request headers:', headers);
+  console.log('Request body:', bodyStr);
+  
   const response = await fetch(`${TUYA_BASE_URL}${path}`, {
     method,
     headers,
     body: bodyStr || undefined
   });
   
-  return await response.json();
+  const responseData = await response.json();
+  console.log('Response:', responseData);
+  
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${JSON.stringify(responseData)}`);
+  }
+  
+  return responseData;
 }
 
 Deno.serve(async (req) => {
@@ -160,13 +188,16 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get('TUYA_CLIENT_SECRET');
     
     if (!clientId || !clientSecret) {
-      throw new Error('Missing Tuya credentials');
+      throw new Error('Missing Tuya credentials in environment variables');
     }
     
-    const { action, uid, deviceId, commands } = await req.json();
+    const requestBody = await req.json();
+    const { action, uid, deviceId, commands } = requestBody;
+    
+    console.log('Request:', { action, uid, deviceId, commands });
     
     if (!uid || !deviceId) {
-      throw new Error('Missing uid or deviceId');
+      throw new Error('Missing uid or deviceId in request');
     }
     
     const config: TuyaConfig = { clientId, clientSecret, uid, deviceId };
@@ -175,26 +206,29 @@ Deno.serve(async (req) => {
     
     switch (action) {
       case 'test':
-        // Test connection
+        // Test connection by getting user devices
         result = await makeAuthenticatedRequest(config, 'GET', `/v1.0/users/${uid}/devices`);
         break;
         
       case 'getDeviceInfo':
+        // Get device information
         result = await makeAuthenticatedRequest(config, 'GET', `/v1.0/devices/${deviceId}`);
         break;
         
       case 'getDeviceStatus':
+        // Get device status
         result = await makeAuthenticatedRequest(config, 'GET', `/v1.0/devices/${deviceId}/status`);
         break;
         
       case 'sendCommand':
-        if (!commands) {
-          throw new Error('Commands required for sendCommand action');
+        // Send command to device
+        if (!commands || !Array.isArray(commands)) {
+          throw new Error('Commands array is required for sendCommand action');
         }
         result = await makeAuthenticatedRequest(
           config,
           'POST',
-          `/v1.0/devices/${deviceId}/commands`,
+          `/v1.0/iot-03/devices/${deviceId}/commands`,
           { commands }
         );
         break;
