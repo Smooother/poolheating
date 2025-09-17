@@ -6,7 +6,12 @@ const corsHeaders = {
 };
 
 interface TuyaDeviceData {
-  status: Array<{
+  success?: boolean;
+  result?: Array<{
+    code: string;
+    value: any;
+  }>;
+  status?: Array<{
     code: string;
     value: any;
   }>;
@@ -52,6 +57,7 @@ async function fetchTuyaDeviceData(supabase: any): Promise<TuyaDeviceData | null
       return null;
     }
 
+    console.log('Raw Tuya device data:', JSON.stringify(deviceData, null, 2));
     return deviceData;
   } catch (error) {
     console.error('Error fetching Tuya device data:', error);
@@ -60,33 +66,62 @@ async function fetchTuyaDeviceData(supabase: any): Promise<TuyaDeviceData | null
 }
 
 function mapTuyaDataToHeatPumpStatus(tuyaData: TuyaDeviceData, deviceId: string): HeatPumpStatus {
-  const statusMap = new Map(tuyaData.status.map(item => [item.code, item.value]));
+  console.log('Mapping Tuya data:', JSON.stringify(tuyaData, null, 2));
   
-  // Map Tuya status codes to our heat pump data
-  const currentTemp = parseFloat(statusMap.get('CurrentTemp') || statusMap.get('Temp') || '26.5');
-  const waterTemp = parseFloat(statusMap.get('WinTemp') || statusMap.get('WaterTemp') || '24.8');
-  const targetTemp = parseFloat(statusMap.get('SetTemp') || statusMap.get('TargetTemp') || '28.0');
-  const speedPercentage = parseInt(statusMap.get('SpeedPercentage') || statusMap.get('Speed') || '75');
-  const powerOn = statusMap.get('Power') === true || statusMap.get('switch') === true;
-  const mode = statusMap.get('SetMode') || statusMap.get('mode') || 'auto';
+  // Handle different response formats from Tuya API
+  let statusArray: Array<{ code: string; value: any }> = [];
+  
+  if (tuyaData.result && Array.isArray(tuyaData.result)) {
+    statusArray = tuyaData.result;
+  } else if (tuyaData.status && Array.isArray(tuyaData.status)) {
+    statusArray = tuyaData.status;
+  } else {
+    console.error('No valid status array found in Tuya data:', tuyaData);
+    // Return default values when no data is available
+    return {
+      device_id: deviceId,
+      current_temp: 20.0,
+      water_temp: 18.0,
+      target_temp: 22.0,
+      speed_percentage: 0,
+      power_status: 'off',
+      mode: 'auto',
+      is_online: false,
+      last_communication: new Date().toISOString()
+    };
+  }
+  
+  const statusMap = new Map(statusArray.map(item => [item.code, item.value]));
+  console.log('Status map:', Object.fromEntries(statusMap));
+  
+  // Map Tuya status codes to our heat pump data with proper number conversion
+  const currentTemp = Number(statusMap.get('CurrentTemp') || statusMap.get('Temp') || statusMap.get('current_temp') || '26.5');
+  const waterTemp = Number(statusMap.get('WinTemp') || statusMap.get('WaterTemp') || statusMap.get('water_temp') || '24.8');
+  const targetTemp = Number(statusMap.get('SetTemp') || statusMap.get('TargetTemp') || statusMap.get('target_temp') || '28.0');
+  const speedPercentage = Number(statusMap.get('SpeedPercentage') || statusMap.get('Speed') || statusMap.get('speed') || '75');
+  const powerOn = statusMap.get('Power') === true || statusMap.get('switch') === true || statusMap.get('power') === true;
+  const mode = String(statusMap.get('SetMode') || statusMap.get('mode') || 'auto');
   
   // Determine power status based on power state and current activity
   let powerStatus: 'on' | 'off' | 'standby' = 'off';
   if (powerOn) {
     powerStatus = speedPercentage > 0 ? 'on' : 'standby';
   }
-
-  return {
+  
+  const result = {
     device_id: deviceId,
-    current_temp: Math.max(0, Math.min(50, currentTemp)), // Reasonable bounds
-    water_temp: Math.max(0, Math.min(50, waterTemp)),
-    target_temp: Math.max(0, Math.min(50, targetTemp)),
-    speed_percentage: Math.max(0, Math.min(100, speedPercentage)),
+    current_temp: Math.max(0, Math.min(50, isNaN(currentTemp) ? 26.5 : currentTemp)),
+    water_temp: Math.max(0, Math.min(50, isNaN(waterTemp) ? 24.8 : waterTemp)),
+    target_temp: Math.max(0, Math.min(50, isNaN(targetTemp) ? 28.0 : targetTemp)),
+    speed_percentage: Math.max(0, Math.min(100, isNaN(speedPercentage) ? 75 : speedPercentage)),
     power_status: powerStatus,
     mode,
     is_online: true,
     last_communication: new Date().toISOString()
   };
+  
+  console.log('Mapped heat pump status:', result);
+  return result;
 }
 
 async function updateHeatPumpStatus(supabase: any, status: HeatPumpStatus): Promise<void> {

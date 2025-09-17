@@ -35,13 +35,17 @@ export class HeatPumpStatusService {
       const rawStatus = data?.[0];
       if (!rawStatus) return null;
 
-      // Ensure power_status is properly typed
+      // Ensure all numeric fields are properly converted and power_status is typed
       const powerStatus = ['on', 'off', 'standby'].includes(rawStatus.power_status) 
         ? rawStatus.power_status as 'on' | 'off' | 'standby'
         : 'off';
 
       return {
         ...rawStatus,
+        current_temp: Number(rawStatus.current_temp) || 0,
+        water_temp: Number(rawStatus.water_temp) || 0,
+        target_temp: Number(rawStatus.target_temp) || 0,
+        speed_percentage: Number(rawStatus.speed_percentage) || 0,
         power_status: powerStatus
       } as HeatPumpStatus;
     } catch (error) {
@@ -91,13 +95,17 @@ export class HeatPumpStatusService {
           
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const rawStatus = payload.new;
-            // Ensure power_status is properly typed
+            // Ensure all numeric fields are properly converted and power_status is typed
             const powerStatus = ['on', 'off', 'standby'].includes(rawStatus.power_status) 
               ? rawStatus.power_status as 'on' | 'off' | 'standby'
               : 'off';
             
             const typedStatus = {
               ...rawStatus,
+              current_temp: Number(rawStatus.current_temp) || 0,
+              water_temp: Number(rawStatus.water_temp) || 0,
+              target_temp: Number(rawStatus.target_temp) || 0,
+              speed_percentage: Number(rawStatus.speed_percentage) || 0,
               power_status: powerStatus
             } as HeatPumpStatus;
             
