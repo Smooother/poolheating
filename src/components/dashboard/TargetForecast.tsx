@@ -171,21 +171,22 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
     return hour % 4 === 0 ? tickItem : '';
   };
 
-  // Get day break positions (midnight hours where day changes)
+  // Get day break positions (midnight boundaries) as timestamps
   const getDayBreaks = () => {
-    const breaks: string[] = [];
-    const seen = new Set<string>();
-    
-    forecastData.forEach((point, index) => {
-      if (point.time === '00' && index > 0) {
-        const dayKey = point.timestamp.toDateString();
-        if (!seen.has(dayKey)) {
-          breaks.push(point.time);
-          seen.add(dayKey);
-        }
-      }
-    });
-    
+    if (!forecastData.length) return [] as number[];
+    const minTs = Math.min(...forecastData.map(p => p.ts));
+    const maxTs = Math.max(...forecastData.map(p => p.ts));
+
+    const first = new Date(minTs);
+    const firstNextMidnight = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 1, 0, 0, 0, 0);
+
+    const breaks: number[] = [];
+    for (let t = firstNextMidnight.getTime(); t <= maxTs; ) {
+      breaks.push(t);
+      const next = new Date(t);
+      next.setDate(next.getDate() + 1);
+      t = next.getTime();
+    }
     return breaks;
   };
 
@@ -279,7 +280,16 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
                 fontSize: '12px',
               }}
             />
-            {/* Day break lines */}
+            {/* Draw main line first */}
+            <Line 
+              type="stepAfter" 
+              dataKey="targetTemp" 
+              stroke={getLineColor('targetTemp')}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, fill: 'hsl(var(--accent))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
+            />
+            {/* Day break lines on top */}
             {getDayBreaks().map((breakTime, index) => (
               <ReferenceLine 
                 key={`day-break-${index}`}
@@ -289,29 +299,19 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
                 strokeOpacity={0.6}
               />
             ))}
-            {/* Current time indicator */}
-            {getCurrentTimePoint() && (
-              <ReferenceLine 
-                x={getCurrentTimePoint()!.time} 
-                stroke="hsl(var(--destructive))" 
-                strokeWidth={2}
-                strokeDasharray="2 2"
-              />
-            )}
+            {/* Current time indicator on top */}
+            <ReferenceLine 
+              x={Date.now()} 
+              stroke="hsl(var(--destructive))" 
+              strokeWidth={2}
+              strokeDasharray="2 2"
+            />
             <ReferenceLine 
               y={settings.baseSetpoint} 
               stroke="hsl(var(--muted-foreground))" 
               strokeDasharray="5 5"
               strokeOpacity={0.7}
               label={{ value: "Base temp", position: "top", fontSize: 9 }}
-            />
-            <Line 
-              type="stepAfter" 
-              dataKey="targetTemp" 
-              stroke={getLineColor('targetTemp')}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: 'hsl(var(--accent))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
           </LineChart>
         </ResponsiveContainer>
