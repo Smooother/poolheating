@@ -60,14 +60,17 @@ const Dashboard = () => {
   const triggerDataCollection = async () => {
     setPriceDataLoading(true);
     try {
-      await triggerPriceCollection();
+      console.log('Manually triggering price collection...');
+      const result = await triggerPriceCollection();
+      console.log('Price collection result:', result);
       toast({
         title: "Price Data Collection Started",
         description: "Downloading latest price data in the background...",
       });
       // Refresh current price after a short delay
-      setTimeout(() => fetchCurrentPrice(), 2000);
+      setTimeout(() => fetchCurrentPrice(), 5000); // Increased delay
     } catch (error) {
+      console.error('Price collection error details:', error);
       toast({
         title: "Collection Failed",
         description: error instanceof Error ? error.message : "Failed to start price collection",
@@ -243,6 +246,15 @@ const Dashboard = () => {
               <Badge className={`mt-2 ${getPriceStateColor(data.priceState)}`}>
                 {getPriceStateLabel(data.priceState)}
               </Badge>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2" 
+                onClick={triggerDataCollection} 
+                disabled={priceDataLoading}
+              >
+                {priceDataLoading ? 'Collecting...' : 'Collect Price Data'}
+              </Button>
             </div>
             <div className="p-3 bg-warning/10 rounded-full">
               <Zap className="h-6 w-6 text-warning" />
