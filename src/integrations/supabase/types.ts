@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_log: {
+        Row: {
+          action_reason: string
+          avg_price_forecast: number
+          created_at: string
+          current_pool_temp: number | null
+          current_price: number
+          current_pump_temp: number | null
+          id: string
+          new_pump_temp: number
+          price_classification: string
+          target_pool_temp: number
+          timestamp: string
+          user_id: string
+        }
+        Insert: {
+          action_reason: string
+          avg_price_forecast: number
+          created_at?: string
+          current_pool_temp?: number | null
+          current_price: number
+          current_pump_temp?: number | null
+          id?: string
+          new_pump_temp: number
+          price_classification: string
+          target_pool_temp: number
+          timestamp?: string
+          user_id?: string
+        }
+        Update: {
+          action_reason?: string
+          avg_price_forecast?: number
+          created_at?: string
+          current_pool_temp?: number | null
+          current_price?: number
+          current_pump_temp?: number | null
+          id?: string
+          new_pump_temp?: number
+          price_classification?: string
+          target_pool_temp?: number
+          timestamp?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automation_settings: {
+        Row: {
+          automation_enabled: boolean
+          created_at: string
+          id: string
+          max_pump_temp: number
+          min_pump_temp: number
+          optimization_horizon_hours: number
+          price_sensitivity: number
+          target_pool_temp: number
+          temp_tolerance: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          automation_enabled?: boolean
+          created_at?: string
+          id?: string
+          max_pump_temp?: number
+          min_pump_temp?: number
+          optimization_horizon_hours?: number
+          price_sensitivity?: number
+          target_pool_temp?: number
+          temp_tolerance?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          automation_enabled?: boolean
+          created_at?: string
+          id?: string
+          max_pump_temp?: number
+          min_pump_temp?: number
+          optimization_horizon_hours?: number
+          price_sensitivity?: number
+          target_pool_temp?: number
+          temp_tolerance?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       heat_pump_status: {
         Row: {
           created_at: string
