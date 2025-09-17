@@ -249,10 +249,10 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               <ReferenceDot 
                 x={currentPriceData.time} 
                 y={currentPriceData.price} 
-                r={4}
+                r={6}
                 fill="hsl(var(--destructive))"
                 stroke="hsl(var(--background))"
-                strokeWidth={2}
+                strokeWidth={3}
               />
             )}
           </AreaChart>
@@ -269,6 +269,12 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           <div className="flex items-center space-x-2">
             <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
             <span className="text-muted-foreground">{actualDays}-day Average</span>
+          </div>
+        )}
+        {currentPriceData && (
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full bg-destructive"></div>
+            <span className="text-muted-foreground">Current Price</span>
           </div>
         )}
       </div>

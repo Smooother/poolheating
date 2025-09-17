@@ -201,10 +201,14 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
               dataKey="time" 
               stroke="hsl(var(--muted-foreground))"
               fontSize={11}
-              interval={3}
+              interval={0}
               angle={-45}
               textAnchor="end"
               height={60}
+              tickFormatter={(value) => {
+                // Show only full hours (e.g., "14:00", "15:00")
+                return value.endsWith(':00') ? value : '';
+              }}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"

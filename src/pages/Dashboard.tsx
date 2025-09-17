@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Thermometer, Zap, TrendingUp, Power, Plus, Minus } from "lucide-react";
+import { Thermometer, Zap, TrendingUp, Power, Plus, Minus, DollarSign } from "lucide-react";
 import { PriceChart } from "@/components/dashboard/PriceChart";
 import { TargetForecast } from "@/components/dashboard/TargetForecast";
 import { useToast } from "@/hooks/use-toast";
@@ -180,7 +180,7 @@ const Dashboard = () => {
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
             <p className="text-sm sm:text-base text-muted-foreground">Dynamic heat pump control based on electricity prices</p>
           </div>
-          <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
+          <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-6">
             <div className="flex items-center space-x-2">
               <Switch 
                 checked={data.automation}
@@ -188,12 +188,30 @@ const Dashboard = () => {
               />
               <span className="text-sm font-medium">Automation</span>
             </div>
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${
+                data.heatPump?.power_status === 'on' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-success animate-pulse' :
+                data.heatPump?.power_status === 'standby' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-warning' : 'bg-muted-foreground'
+              }`} />
+              <Power className={`h-4 w-4 ${
+                data.heatPump?.power_status === 'on' ? 'text-success' :
+                data.heatPump?.power_status === 'standby' ? 'text-warning' : 'text-muted-foreground'
+              }`} />
+              <span className="text-sm font-medium capitalize">
+                {data.heatPump 
+                  ? HeatPumpStatusService.isDeviceOnline(data.heatPump) 
+                    ? data.heatPump.power_status 
+                    : 'Offline'
+                  : 'Unknown'
+                }
+              </span>
+            </div>
           </div>
         </div>
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Current Temperature */}
+        {/* Target Temperature */}
         <Card className="p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -205,24 +223,33 @@ const Dashboard = () => {
               </Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Current Temperature</p>
+              <p className="text-sm text-muted-foreground">Target Temperature</p>
               <p className="text-3xl font-bold text-primary">
-                {data.heatPump ? `${data.heatPump.current_temp}°C` : '---'}
+                {data.heatPump ? `${data.heatPump.target_temp}°C` : `${settings.baseSetpoint}°C`}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-muted-foreground">Target:</span>
-                <span className="ml-1 font-medium">
-                  {data.heatPump ? `${data.heatPump.target_temp}°C` : `${settings.baseSetpoint}°C`}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Status:</span>
-                <span className="ml-1 font-medium capitalize">
-                  {data.heatPump ? HeatPumpStatusService.getStatusDescription(data.heatPump) : 'Unknown'}
-                </span>
-              </div>
+            <div className="flex items-center justify-center space-x-3">
+              <Button
+                variant="outline" 
+                size="sm"
+                onClick={() => handleTargetTempChange(settings.baseSetpoint - 1)}
+                disabled={settings.baseSetpoint <= settings.minTemp}
+                className="h-8 w-8 p-0"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[3rem] text-center">
+                {settings.baseSetpoint}°C
+              </span>
+              <Button
+                variant="outline" 
+                size="sm"
+                onClick={() => handleTargetTempChange(settings.baseSetpoint + 1)}
+                disabled={settings.baseSetpoint >= settings.maxTemp}
+                className="h-8 w-8 p-0"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </Card>
@@ -244,16 +271,6 @@ const Dashboard = () => {
               <p className="text-3xl font-bold text-blue-500">
                 {data.heatPump ? `${data.heatPump.water_temp}°C` : '---'}
               </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-muted-foreground">Min:</span>
-                <span className="ml-1 font-medium">18°C</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Max:</span>
-                <span className="ml-1 font-medium">32°C</span>
-              </div>
             </div>
           </div>
         </Card>
@@ -279,64 +296,29 @@ const Dashboard = () => {
                 {data.heatPump ? `${data.heatPump.speed_percentage}%` : '---'}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-muted-foreground">Mode:</span>
-                <span className="ml-1 font-medium">
-                  {data.heatPump?.mode || 'Unknown'}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Load:</span>
-                <span className="ml-1 font-medium">
-                  {data.heatPump 
-                    ? data.heatPump.speed_percentage > 75 ? 'High' 
-                      : data.heatPump.speed_percentage > 40 ? 'Medium' : 'Low'
-                    : '---'
-                  }
-                </span>
-              </div>
-            </div>
           </div>
         </Card>
 
-        {/* Power & Price */}
+        {/* Current Price */}
         <Card className="p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="p-3 bg-warning/10 rounded-full">
-                <Power className="h-6 w-6 text-warning" />
+                <DollarSign className="h-6 w-6 text-warning" />
               </div>
-              <div className={`flex items-center space-x-1 ${
-                data.heatPump?.power_status === 'on' ? 'text-success' :
-                data.heatPump?.power_status === 'standby' ? 'text-warning' : 'text-muted-foreground'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  data.heatPump?.power_status === 'on' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-success animate-pulse' :
-                  data.heatPump?.power_status === 'standby' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-warning' : 'bg-muted-foreground'
-                }`} />
-                <span className="text-xs font-medium capitalize">
-                  {data.heatPump 
-                    ? HeatPumpStatusService.isDeviceOnline(data.heatPump) 
-                      ? data.heatPump.power_status 
-                      : 'Offline'
-                    : 'Unknown'
-                  }
-                </span>
-              </div>
+              <Badge className={`${getPriceStateColor(data.priceState)}`}>
+                {getPriceStateLabel(data.priceState)}
+              </Badge>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Current Price</p>
-              <p className="text-2xl font-bold text-warning">
+              <p className="text-3xl font-bold text-warning">
                 {loading ? '...' : (data.currentPrice * 100).toFixed(1)}
                 <span className="text-sm font-normal ml-1">öre/kWh</span>
               </p>
             </div>
-            <div className="space-y-1">
-              <Badge className={`w-full justify-center ${getPriceStateColor(data.priceState)}`}>
-                {getPriceStateLabel(data.priceState)}
-              </Badge>
-              <p className="text-xs text-center text-muted-foreground">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">
                 {CONFIG.priceProvider} • {settings.biddingZone}
               </p>
             </div>
