@@ -127,12 +127,12 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Pool Control</h1>
-          <p className="text-muted-foreground">Dynamic heat pump control based on electricity prices</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Dynamic heat pump control based on electricity prices</p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
           <div className="flex items-center space-x-2">
             <Switch
               checked={data.automation}
@@ -140,7 +140,7 @@ const Dashboard = () => {
             />
             <span className="text-sm font-medium">Automation</span>
           </div>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">
             <Settings className="h-4 w-4 mr-2" />
             Settings
           </Button>

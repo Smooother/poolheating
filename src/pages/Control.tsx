@@ -53,16 +53,16 @@ const Control = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Control Settings</h1>
-          <p className="text-muted-foreground">Configure temperature targets and price-based adjustments</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Control Settings</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Configure temperature targets and price-based adjustments</p>
         </div>
-        <div className="flex space-x-3">
-          <Button variant="outline" onClick={handleResetDefaults}>
+        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
+          <Button variant="outline" onClick={handleResetDefaults} className="w-full sm:w-auto">
             Reset Defaults
           </Button>
-          <Button onClick={handleSaveSettings}>
+          <Button onClick={handleSaveSettings} className="w-full sm:w-auto">
             Save Settings
           </Button>
         </div>
@@ -146,7 +146,7 @@ const Control = () => {
             </div>
 
             {/* Temperature Limits */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Min Temperature</Label>
                 <div className="flex items-center space-x-2">
@@ -230,7 +230,7 @@ const Control = () => {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Low Percentile</Label>
                   <div className="flex items-center space-x-2">

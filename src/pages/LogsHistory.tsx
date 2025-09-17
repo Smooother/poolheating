@@ -277,69 +277,69 @@ const LogsHistory = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Logs & History</h1>
-          <p className="text-muted-foreground">System events, price updates, and setpoint changes</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Logs & History</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">System events, price updates, and setpoint changes</p>
         </div>
-        <Button onClick={exportLogs} variant="outline">
+        <Button onClick={exportLogs} variant="outline" className="w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />
           Export CSV
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
         <Card className="status-card">
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Events</p>
-                <p className="text-2xl font-bold">{logs.length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Events</p>
+                <p className="text-xl sm:text-2xl font-bold">{logs.length}</p>
               </div>
-              <Activity className="h-6 w-6 text-primary" />
+              <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             </div>
           </div>
         </Card>
 
         <Card className="status-card">
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Successful</p>
-                <p className="text-2xl font-bold text-success">
+                <p className="text-xs sm:text-sm text-muted-foreground">Successful</p>
+                <p className="text-xl sm:text-2xl font-bold text-success">
                   {logs.filter(l => l.status === 'success').length}
                 </p>
               </div>
-              <CheckCircle className="h-6 w-6 text-success" />
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-success" />
             </div>
           </div>
         </Card>
 
         <Card className="status-card">
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Failed</p>
-                <p className="text-2xl font-bold text-destructive">
+                <p className="text-xs sm:text-sm text-muted-foreground">Failed</p>
+                <p className="text-xl sm:text-2xl font-bold text-destructive">
                   {logs.filter(l => l.status === 'failed').length}
                 </p>
               </div>
-              <XCircle className="h-6 w-6 text-destructive" />
+              <XCircle className="h-5 w-5 sm:h-6 sm:w-6 text-destructive" />
             </div>
           </div>
         </Card>
 
         <Card className="status-card">
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Last 24h</p>
-                <p className="text-2xl font-bold">
+                <p className="text-xs sm:text-sm text-muted-foreground">Last 24h</p>
+                <p className="text-xl sm:text-2xl font-bold">
                   {logs.filter(l => l.timestamp > new Date(Date.now() - 24 * 60 * 60 * 1000)).length}
                 </p>
               </div>
-              <Calendar className="h-6 w-6 text-accent" />
+              <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-accent" />
             </div>
           </div>
         </Card>
@@ -347,8 +347,8 @@ const LogsHistory = () => {
 
       {/* Filters */}
       <Card className="status-card">
-        <div className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <div className="p-4 sm:p-6">
+          <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -368,7 +368,7 @@ const LogsHistory = () => {
               setTypeFilter(value);
               setTimeout(applyFilters, 100);
             }}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
@@ -384,7 +384,7 @@ const LogsHistory = () => {
               setStatusFilter(value);
               setTimeout(applyFilters, 100);
             }}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -400,66 +400,68 @@ const LogsHistory = () => {
 
       {/* Logs Table */}
       <Card className="status-card">
-        <div className="p-6">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Change</TableHead>
-                  <TableHead>Adapter</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Message</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.slice(0, 20).map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-mono text-sm">
-                      {format(log.timestamp, 'MMM dd, HH:mm')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        {getTypeIcon(log.type)}
-                        <span className="text-sm">{getTypeLabel(log.type)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getPriceStateColor(log.priceState)} variant="outline">
-                          {log.priceState}
-                        </Badge>
-                        <span className="text-sm font-mono">{log.price.toFixed(3)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getSetpointChange(log)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{log.adapter}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(log.status)}
-                        <span className="text-sm capitalize">{log.status}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-xs">
-                      <p className="text-sm truncate" title={log.message}>
-                        {log.message}
-                      </p>
-                    </TableCell>
+        <div className="p-4 sm:p-6">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="min-w-full inline-block align-middle">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Time</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Type</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Price</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">Change</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap hidden md:table-cell">Adapter</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Status</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Message</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.slice(0, 20).map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="font-mono text-xs sm:text-sm whitespace-nowrap">
+                        {format(log.timestamp, 'MMM dd, HH:mm')}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center space-x-1 sm:space-x-2">
+                          {getTypeIcon(log.type)}
+                          <span className="text-xs sm:text-sm hidden sm:inline">{getTypeLabel(log.type)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+                          <Badge className={getPriceStateColor(log.priceState)} variant="outline">
+                            <span className="text-xs">{log.priceState}</span>
+                          </Badge>
+                          <span className="text-xs font-mono">{log.price.toFixed(3)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell whitespace-nowrap">
+                        {getSetpointChange(log)}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell whitespace-nowrap">
+                        <Badge variant="outline" className="text-xs">{log.adapter}</Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center space-x-1 sm:space-x-2">
+                          {getStatusIcon(log.status)}
+                          <span className="text-xs sm:text-sm capitalize hidden sm:inline">{log.status}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[150px] sm:max-w-xs">
+                        <p className="text-xs sm:text-sm truncate" title={log.message}>
+                          {log.message}
+                        </p>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           
           {filteredLogs.length > 20 && (
             <div className="mt-4 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Showing 20 of {filteredLogs.length} entries. Export CSV for complete history.
               </p>
             </div>

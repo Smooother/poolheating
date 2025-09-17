@@ -142,8 +142,8 @@ const Integrations = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
-          <p className="text-muted-foreground">Configure external services and data sources</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Integrations</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Configure external services and data sources</p>
         </div>
       </div>
 
@@ -162,9 +162,9 @@ const Integrations = () => {
       </Card>
 
       <Tabs defaultValue="nordpool" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="nordpool">Live Price Data</TabsTrigger>
-          <TabsTrigger value="heatpump">Heat Pump Control</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
+          <TabsTrigger value="nordpool" className="text-sm">Live Price Data</TabsTrigger>
+          <TabsTrigger value="heatpump" className="text-sm">Heat Pump Control</TabsTrigger>
         </TabsList>
 
         {/* Price Data Configuration */}
@@ -187,7 +187,7 @@ const Integrations = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>API URL</Label>
                     <Input
@@ -198,7 +198,7 @@ const Integrations = () => {
                       }))}
                       placeholder="https://api.nordpoolgroup.com/api"
                       disabled
-                      className="bg-muted"
+                      className="bg-muted text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -223,7 +223,7 @@ const Integrations = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Currency</Label>
                     <Select
@@ -305,32 +305,32 @@ const Integrations = () => {
           <Card className="status-card">
             <div className="p-6">
               <h4 className="font-semibold mb-3">Supported Operations</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Read current water temperature</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Read/write target setpoint</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Read system status</span>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Monitor error states</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Log all setpoint changes</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                    <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                     <span>Safety limit enforcement</span>
                   </div>
                 </div>
