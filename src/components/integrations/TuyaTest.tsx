@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { tuyaService } from '@/services/tuyaService';
 import { TuyaAdapter } from '@/services/TuyaAdapter';
 import { HeatPumpService } from '@/services/heatPumpService';
+import { supabase } from '@/integrations/supabase/client';
 
 export const TuyaTest = () => {
   const { toast } = useToast();
@@ -307,6 +308,41 @@ export const TuyaTest = () => {
               variant="outline"
             >
               {testing ? 'Setting...' : 'Test Set Temperature'}
+            </Button>
+            <Button 
+              onClick={async () => {
+                setTesting(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('heat-pump-monitor', {
+                    body: { action: 'monitor' }
+                  });
+                  
+                  if (error) {
+                    toast({
+                      title: "Monitor Test Failed",
+                      description: error.message || "Failed to trigger heat pump monitor",
+                      variant: "destructive",
+                    });
+                  } else {
+                    toast({
+                      title: "Monitor Test Success",
+                      description: "Heat pump monitor triggered successfully. Check logs for field codes.",
+                    });
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Monitor Test Error",
+                    description: error.message || "Unknown error occurred",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setTesting(false);
+                }
+              }} 
+              disabled={testing || !isConfigured}
+              variant="outline"
+            >
+              {testing ? 'Monitoring...' : 'Test Heat Pump Monitor'}
             </Button>
           </div>
 

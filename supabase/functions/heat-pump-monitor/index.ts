@@ -93,6 +93,8 @@ function mapTuyaDataToHeatPumpStatus(tuyaData: TuyaDeviceData, deviceId: string)
   
   const statusMap = new Map(statusArray.map(item => [item.code, item.value]));
   console.log('Status map:', Object.fromEntries(statusMap));
+  console.log('Available field codes:', statusArray.map(item => item.code));
+  console.log('Looking for WinTemp, found:', statusMap.get('WinTemp'));
   
   // Map Tuya status codes to our heat pump data with proper number conversion
   const currentTemp = Number(statusMap.get('CurrentTemp') || statusMap.get('Temp') || statusMap.get('current_temp') || '26.5');
