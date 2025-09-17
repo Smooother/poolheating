@@ -1,18 +1,45 @@
 import CryptoJS from 'crypto-js';
 
 // Tuya Cloud Configuration
-const TUYA_CONFIG = {
-  baseUrl: 'https://openapi.tuyaeu.com',
-  clientId: process.env.TUYA_CLIENT_ID || '',
-  clientSecret: process.env.TUYA_CLIENT_SECRET || '',
-  uid: process.env.TUYA_UID || '',
-  deviceId: process.env.TUYA_DEVICE_ID || '',
-  // DP codes
-  powerCode: 'Power',
-  setTempCode: 'SetTemp',
-  modeCode: 'SetMode',
-  silentCode: 'SilentMdoe'
+const getTuyaConfig = () => {
+  // Try to get from localStorage first
+  const storedConfig = localStorage.getItem('tuya_config');
+  if (storedConfig) {
+    try {
+      const parsed = JSON.parse(storedConfig);
+      return {
+        baseUrl: 'https://openapi.tuyaeu.com',
+        clientId: parsed.clientId || '',
+        clientSecret: parsed.clientSecret || '',
+        uid: parsed.uid || '',
+        deviceId: parsed.deviceId || '',
+        // DP codes
+        powerCode: 'Power',
+        setTempCode: 'SetTemp',
+        modeCode: 'SetMode',
+        silentCode: 'SilentMdoe'
+      };
+    } catch (error) {
+      console.error('Error parsing stored Tuya config:', error);
+    }
+  }
+  
+  // Default empty config
+  return {
+    baseUrl: 'https://openapi.tuyaeu.com',
+    clientId: '',
+    clientSecret: '',
+    uid: '',
+    deviceId: '',
+    // DP codes
+    powerCode: 'Power',
+    setTempCode: 'SetTemp',
+    modeCode: 'SetMode',
+    silentCode: 'SilentMdoe'
+  };
 };
+
+const TUYA_CONFIG = getTuyaConfig();
 
 interface TuyaToken {
   access_token: string;
@@ -36,6 +63,37 @@ interface TuyaDeviceInfo {
 class TuyaCloudService {
   private token: TuyaToken | null = null;
   private tokenKey = 'tuya_token';
+  private config = getTuyaConfig();
+
+  /**
+   * Update Tuya configuration
+   */
+  updateConfig(config: {
+    clientId: string;
+    clientSecret: string;
+    uid: string;
+    deviceId: string;
+  }): void {
+    localStorage.setItem('tuya_config', JSON.stringify(config));
+    this.config = getTuyaConfig();
+    // Clear existing token when config changes
+    this.token = null;
+    localStorage.removeItem(this.tokenKey);
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig() {
+    return { ...this.config };
+  }
+
+  /**
+   * Check if configuration is complete
+   */
+  isConfigured(): boolean {
+    return !!(this.config.clientId && this.config.clientSecret && this.config.uid && this.config.deviceId);
+  }
 
   /**
    * Generate signature for Tuya API requests
@@ -63,17 +121,17 @@ class TuyaCloudService {
                         '' + '\n' + path;
 
     const signature = this.generateSignature(
-      TUYA_CONFIG.clientId,
+      this.config.clientId,
       timestamp,
       nonce,
       stringToSign,
-      TUYA_CONFIG.clientSecret,
+      this.config.clientSecret,
       accessToken
     );
 
     return {
       'Content-Type': 'application/json',
-      'client_id': TUYA_CONFIG.clientId,
+      'client_id': this.config.clientId,
       't': timestamp,
       'sign_method': 'HMAC-SHA256',
       'nonce': nonce,
@@ -89,7 +147,7 @@ class TuyaCloudService {
     const token = await this.getValidToken();
     const headers = this.generateHeaders(method, path, body, token.access_token);
     
-    const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+    const response = await fetch(`${this.config.baseUrl}${path}`, {
       method,
       headers,
       ...(body && { body: JSON.stringify(body) })
@@ -104,7 +162,7 @@ class TuyaCloudService {
         const newToken = await this.getValidToken();
         const newHeaders = this.generateHeaders(method, path, body, newToken.access_token);
         
-        const retryResponse = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+        const retryResponse = await fetch(`${this.config.baseUrl}${path}`, {
           method,
           headers: newHeaders,
           ...(body && { body: JSON.stringify(body) })
@@ -129,7 +187,7 @@ class TuyaCloudService {
     const path = '/v1.0/token?grant_type=1';
     const headers = this.generateHeaders('GET', path);
 
-    const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+    const response = await fetch(`${this.config.baseUrl}${path}`, {
       method: 'GET',
       headers
     });
@@ -167,7 +225,7 @@ class TuyaCloudService {
     const headers = this.generateHeaders('GET', path);
 
     try {
-      const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+      const response = await fetch(`${this.config.baseUrl}${path}`, {
         method: 'GET',
         headers
       });
@@ -236,6 +294,11 @@ class TuyaCloudService {
    */
   async testConnection(): Promise<boolean> {
     try {
+      if (!this.isConfigured()) {
+        console.error('❌ Tuya Cloud configuration incomplete');
+        return false;
+      }
+      
       const token = await this.getValidToken();
       console.log('✅ Tuya Cloud connection successful');
       console.log('Access token:', token.access_token.substring(0, 20) + '...');
@@ -250,7 +313,7 @@ class TuyaCloudService {
    * Get device information
    */
   async getDeviceInfo(): Promise<TuyaDeviceInfo> {
-    const path = `/v1.0/devices/${TUYA_CONFIG.deviceId}`;
+    const path = `/v1.0/devices/${this.config.deviceId}`;
     const data = await this.makeRequest('GET', path);
     return data.result;
   }
@@ -259,7 +322,7 @@ class TuyaCloudService {
    * Get device status
    */
   async getDeviceStatus(): Promise<TuyaDeviceStatus[]> {
-    const path = `/v1.0/devices/${TUYA_CONFIG.deviceId}/status`;
+    const path = `/v1.0/devices/${this.config.deviceId}/status`;
     const data = await this.makeRequest('GET', path);
     return data.result;
   }
@@ -268,7 +331,7 @@ class TuyaCloudService {
    * Send command to device
    */
   async sendCommand(commands: { code: string; value: any }[]): Promise<boolean> {
-    const path = `/v1.0/devices/${TUYA_CONFIG.deviceId}/commands`;
+    const path = `/v1.0/devices/${this.config.deviceId}/commands`;
     const body = { commands };
 
     try {
@@ -285,7 +348,7 @@ class TuyaCloudService {
    */
   async setPower(on: boolean): Promise<boolean> {
     return this.sendCommand([{
-      code: TUYA_CONFIG.powerCode,
+      code: this.config.powerCode,
       value: on
     }]);
   }
@@ -295,7 +358,7 @@ class TuyaCloudService {
    */
   async setTemperature(temperature: number): Promise<boolean> {
     return this.sendCommand([{
-      code: TUYA_CONFIG.setTempCode,
+      code: this.config.setTempCode,
       value: Math.round(temperature)
     }]);
   }
@@ -305,7 +368,7 @@ class TuyaCloudService {
    */
   async setMode(mode: string): Promise<boolean> {
     return this.sendCommand([{
-      code: TUYA_CONFIG.modeCode,
+      code: this.config.modeCode,
       value: mode
     }]);
   }
@@ -315,7 +378,7 @@ class TuyaCloudService {
    */
   async setSilentMode(silent: boolean): Promise<boolean> {
     return this.sendCommand([{
-      code: TUYA_CONFIG.silentCode,
+      code: this.config.silentCode,
       value: silent
     }]);
   }
@@ -326,7 +389,7 @@ class TuyaCloudService {
   async getCurrentTemperature(): Promise<number | null> {
     try {
       const status = await this.getDeviceStatus();
-      const tempStatus = status.find(s => s.code === TUYA_CONFIG.setTempCode);
+      const tempStatus = status.find(s => s.code === this.config.setTempCode);
       return tempStatus ? Number(tempStatus.value) : null;
     } catch (error) {
       console.error('Failed to get current temperature:', error);
@@ -340,7 +403,7 @@ class TuyaCloudService {
   async getPowerStatus(): Promise<boolean | null> {
     try {
       const status = await this.getDeviceStatus();
-      const powerStatus = status.find(s => s.code === TUYA_CONFIG.powerCode);
+      const powerStatus = status.find(s => s.code === this.config.powerCode);
       return powerStatus ? Boolean(powerStatus.value) : null;
     } catch (error) {
       console.error('Failed to get power status:', error);

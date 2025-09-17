@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { tuyaService } from '@/services/tuyaService';
 import { TuyaAdapter } from '@/services/TuyaAdapter';
@@ -14,6 +16,35 @@ export const TuyaTest = () => {
   const [results, setResults] = useState<any>(null);
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
   const [adapterStatus, setAdapterStatus] = useState<any>(null);
+  const [config, setConfig] = useState({
+    clientId: '',
+    clientSecret: '',
+    uid: '',
+    deviceId: ''
+  });
+
+  useEffect(() => {
+    // Load existing config
+    const existingConfig = tuyaService.getConfig();
+    setConfig(existingConfig);
+  }, []);
+
+  const updateConfig = () => {
+    if (!config.clientId || !config.clientSecret || !config.uid || !config.deviceId) {
+      toast({
+        title: "Configuration Error",
+        description: "Please fill in all configuration fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    tuyaService.updateConfig(config);
+    toast({
+      title: "Configuration Updated",
+      description: "Tuya configuration has been saved successfully",
+    });
+  };
 
   const testTuyaConnection = async () => {
     setTesting(true);
@@ -143,6 +174,72 @@ export const TuyaTest = () => {
 
   return (
     <div className="space-y-6">
+      {/* Configuration Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tuya Cloud Configuration</CardTitle>
+          <CardDescription>
+            Configure your Tuya Cloud credentials to connect to your heat pump device
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="clientId">Client ID</Label>
+              <Input
+                id="clientId"
+                type="text"
+                value={config.clientId}
+                onChange={(e) => setConfig({...config, clientId: e.target.value})}
+                placeholder="Enter Client ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clientSecret">Client Secret</Label>
+              <Input
+                id="clientSecret"
+                type="password"
+                value={config.clientSecret}
+                onChange={(e) => setConfig({...config, clientSecret: e.target.value})}
+                placeholder="Enter Client Secret"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="uid">UID</Label>
+              <Input
+                id="uid"
+                type="text"
+                value={config.uid}
+                onChange={(e) => setConfig({...config, uid: e.target.value})}
+                placeholder="euXXXXXXXXXXXX"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deviceId">Device ID</Label>
+              <Input
+                id="deviceId"
+                type="text"
+                value={config.deviceId}
+                onChange={(e) => setConfig({...config, deviceId: e.target.value})}
+                placeholder="bfXXXXXXXXXXXX"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={updateConfig} size="sm">
+              Save Configuration
+            </Button>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              Status: 
+              <Badge variant={tuyaService.isConfigured() ? "default" : "destructive"}>
+                {tuyaService.isConfigured() ? 'Configured' : 'Not Configured'}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test Card */}
       <Card>
         <CardHeader>
           <CardTitle>Tuya Cloud Integration Test</CardTitle>
@@ -154,21 +251,21 @@ export const TuyaTest = () => {
           <div className="flex gap-2">
             <Button 
               onClick={testTuyaConnection} 
-              disabled={testing}
+              disabled={testing || !tuyaService.isConfigured()}
               variant="outline"
             >
               {testing ? 'Testing...' : 'Test Connection'}
             </Button>
             <Button 
               onClick={testAdapterConnection} 
-              disabled={testing}
+              disabled={testing || !tuyaService.isConfigured()}
               variant="outline"
             >
               {testing ? 'Testing...' : 'Test Adapter'}
             </Button>
             <Button 
               onClick={testTemperatureSet} 
-              disabled={testing}
+              disabled={testing || !tuyaService.isConfigured()}
               variant="outline"
             >
               {testing ? 'Setting...' : 'Test Set Temperature'}
