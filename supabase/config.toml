@@ -26,5 +26,8 @@ verify_jwt = false
 [functions.tuya-proxy]
 verify_jwt = false
 
+[functions.heat-pump-monitor]
+verify_jwt = false
+
 [edge-runtime]
 policy = "per-worker"

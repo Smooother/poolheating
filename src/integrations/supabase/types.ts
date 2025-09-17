@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      heat_pump_status: {
+        Row: {
+          created_at: string
+          current_temp: number
+          device_id: string
+          id: string
+          is_online: boolean
+          last_communication: string
+          mode: string | null
+          power_status: string
+          speed_percentage: number
+          target_temp: number
+          updated_at: string
+          water_temp: number
+        }
+        Insert: {
+          created_at?: string
+          current_temp: number
+          device_id: string
+          id?: string
+          is_online?: boolean
+          last_communication?: string
+          mode?: string | null
+          power_status: string
+          speed_percentage: number
+          target_temp: number
+          updated_at?: string
+          water_temp: number
+        }
+        Update: {
+          created_at?: string
+          current_temp?: number
+          device_id?: string
+          id?: string
+          is_online?: boolean
+          last_communication?: string
+          mode?: string | null
+          power_status?: string
+          speed_percentage?: number
+          target_temp?: number
+          updated_at?: string
+          water_temp?: number
+        }
+        Relationships: []
+      }
       price_data: {
         Row: {
           bidding_zone: string

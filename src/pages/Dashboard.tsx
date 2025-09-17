@@ -13,17 +13,10 @@ import { fetchStoredPrices, getLatestPriceDate, triggerPriceCollection } from "@
 import { calculateRollingAverage, classifyPrice } from "@/services/priceService";
 import { useSettings } from "@/contexts/SettingsContext";
 import { CONFIG } from "@/lib/config";
-
-interface HeatPumpLiveData {
-  currentTemp: number;
-  waterTemp: number;
-  speedPercentage: number;
-  powerStatus: 'on' | 'off' | 'standby';
-  targetTemp: number;
-}
+import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatusService";
 
 interface DashboardData {
-  heatPump: HeatPumpLiveData;
+  heatPump: HeatPumpStatus | null;
   priceState: 'low' | 'normal' | 'high';
   currentPrice: number;
   automation: boolean;
@@ -34,13 +27,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const { settings, updateSetting } = useSettings();
   const [data, setData] = useState<DashboardData>({
-    heatPump: {
-      currentTemp: 26.5,
-      waterTemp: 24.8,
-      speedPercentage: 75,
-      powerStatus: 'on',
-      targetTemp: settings.baseSetpoint,
-    },
+    heatPump: null,
     priceState: 'normal',
     currentPrice: 0.45,
     automation: true,
@@ -61,14 +48,24 @@ const Dashboard = () => {
   const handleTargetTempChange = (newTemp: number) => {
     if (newTemp >= settings.minTemp && newTemp <= settings.maxTemp) {
       updateSetting('baseSetpoint', newTemp);
-      setData(prev => ({ 
-        ...prev, 
-        heatPump: { ...prev.heatPump, targetTemp: newTemp }
-      }));
       toast({
         title: "Target Temperature Updated",
         description: `New target: ${newTemp}°C`,
       });
+    }
+  };
+
+  // Fetch initial heat pump status
+  const fetchHeatPumpStatus = async () => {
+    try {
+      const status = await HeatPumpStatusService.getLatestStatus();
+      setData(prev => ({
+        ...prev,
+        heatPump: status,
+        lastUpdate: new Date(),
+      }));
+    } catch (error) {
+      console.error('Failed to fetch heat pump status:', error);
     }
   };
 
@@ -115,11 +112,33 @@ const Dashboard = () => {
   // Initial load and periodic refresh
   useEffect(() => {
     fetchCurrentPrice();
+    fetchHeatPumpStatus();
     
-    // Refresh every 30 minutes
-    const interval = setInterval(fetchCurrentPrice, 30 * 60 * 1000);
+    // Refresh prices every 30 minutes
+    const priceInterval = setInterval(fetchCurrentPrice, 30 * 60 * 1000);
     
-    return () => clearInterval(interval);
+    // Trigger heat pump status updates more frequently (every 2 minutes)
+    const heatPumpInterval = setInterval(() => {
+      HeatPumpStatusService.triggerStatusUpdate();
+    }, 2 * 60 * 1000);
+    
+    return () => {
+      clearInterval(priceInterval);
+      clearInterval(heatPumpInterval);
+    };
+  }, []);
+
+  // Set up real-time heat pump status subscription
+  useEffect(() => {
+    const unsubscribe = HeatPumpStatusService.subscribeToStatusChanges((status) => {
+      setData(prev => ({
+        ...prev,
+        heatPump: status,
+        lastUpdate: new Date(),
+      }));
+    });
+
+    return unsubscribe;
   }, []);
 
   // Refresh when settings change
@@ -185,16 +204,22 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Current Temperature</p>
-              <p className="text-3xl font-bold text-primary">{data.heatPump.currentTemp}°C</p>
+              <p className="text-3xl font-bold text-primary">
+                {data.heatPump ? `${data.heatPump.current_temp}°C` : '---'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Target:</span>
-                <span className="ml-1 font-medium">{data.heatPump.targetTemp}°C</span>
+                <span className="ml-1 font-medium">
+                  {data.heatPump ? `${data.heatPump.target_temp}°C` : `${settings.baseSetpoint}°C`}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Status:</span>
-                <span className="ml-1 font-medium capitalize">{data.heatPump.powerStatus}</span>
+                <span className="ml-1 font-medium capitalize">
+                  {data.heatPump ? HeatPumpStatusService.getStatusDescription(data.heatPump) : 'Unknown'}
+                </span>
               </div>
             </div>
           </div>
@@ -207,11 +232,16 @@ const Dashboard = () => {
               <div className="p-3 bg-blue-500/10 rounded-full">
                 <Thermometer className="h-6 w-6 text-blue-500" />
               </div>
-              <div className={`w-3 h-3 rounded-full ${data.heatPump.waterTemp > 20 ? 'bg-success' : 'bg-warning'}`} />
+              <div className={`w-3 h-3 rounded-full ${
+                data.heatPump && data.heatPump.water_temp > 20 ? 'bg-success' : 
+                data.heatPump && data.heatPump.is_online ? 'bg-warning' : 'bg-muted-foreground'
+              }`} />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Water Temperature</p>
-              <p className="text-3xl font-bold text-blue-500">{data.heatPump.waterTemp}°C</p>
+              <p className="text-3xl font-bold text-blue-500">
+                {data.heatPump ? `${data.heatPump.water_temp}°C` : '---'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
@@ -235,24 +265,34 @@ const Dashboard = () => {
               </div>
               <div className="text-right">
                 <div className={`w-2 h-6 rounded-full bg-gradient-to-t ${
-                  data.heatPump.speedPercentage > 80 ? 'from-red-500 to-red-300' :
-                  data.heatPump.speedPercentage > 50 ? 'from-yellow-500 to-yellow-300' :
+                  data.heatPump && data.heatPump.speed_percentage > 80 ? 'from-red-500 to-red-300' :
+                  data.heatPump && data.heatPump.speed_percentage > 50 ? 'from-yellow-500 to-yellow-300' :
                   'from-green-500 to-green-300'
                 }`} />
               </div>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Pump Speed</p>
-              <p className="text-3xl font-bold text-accent">{data.heatPump.speedPercentage}%</p>
+              <p className="text-3xl font-bold text-accent">
+                {data.heatPump ? `${data.heatPump.speed_percentage}%` : '---'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Mode:</span>
-                <span className="ml-1 font-medium">Variable</span>
+                <span className="ml-1 font-medium">
+                  {data.heatPump?.mode || 'Unknown'}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Load:</span>
-                <span className="ml-1 font-medium">{data.heatPump.speedPercentage > 75 ? 'High' : data.heatPump.speedPercentage > 40 ? 'Medium' : 'Low'}</span>
+                <span className="ml-1 font-medium">
+                  {data.heatPump 
+                    ? data.heatPump.speed_percentage > 75 ? 'High' 
+                      : data.heatPump.speed_percentage > 40 ? 'Medium' : 'Low'
+                    : '---'
+                  }
+                </span>
               </div>
             </div>
           </div>
@@ -266,14 +306,21 @@ const Dashboard = () => {
                 <Power className="h-6 w-6 text-warning" />
               </div>
               <div className={`flex items-center space-x-1 ${
-                data.heatPump.powerStatus === 'on' ? 'text-success' :
-                data.heatPump.powerStatus === 'standby' ? 'text-warning' : 'text-muted-foreground'
+                data.heatPump?.power_status === 'on' ? 'text-success' :
+                data.heatPump?.power_status === 'standby' ? 'text-warning' : 'text-muted-foreground'
               }`}>
                 <div className={`w-2 h-2 rounded-full ${
-                  data.heatPump.powerStatus === 'on' ? 'bg-success animate-pulse' :
-                  data.heatPump.powerStatus === 'standby' ? 'bg-warning' : 'bg-muted-foreground'
+                  data.heatPump?.power_status === 'on' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-success animate-pulse' :
+                  data.heatPump?.power_status === 'standby' && HeatPumpStatusService.isDeviceOnline(data.heatPump) ? 'bg-warning' : 'bg-muted-foreground'
                 }`} />
-                <span className="text-xs font-medium capitalize">{data.heatPump.powerStatus}</span>
+                <span className="text-xs font-medium capitalize">
+                  {data.heatPump 
+                    ? HeatPumpStatusService.isDeviceOnline(data.heatPump) 
+                      ? data.heatPump.power_status 
+                      : 'Offline'
+                    : 'Unknown'
+                  }
+                </span>
               </div>
             </div>
             <div>
