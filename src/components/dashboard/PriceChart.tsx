@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
 import { fetchPrices, calculateRollingAverage, PricePoint, PriceProviderConfig } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
 import { useToast } from '@/hooks/use-toast';
@@ -49,15 +49,20 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       setAveragePrice(avgPrice);
       setActualDays(usedDays);
 
-      // Transform data for chart
-      const transformedData: ChartDataPoint[] = prices
-        .map(point => {
+      // Transform data for step chart - each price is valid for full hour
+      const stepData: ChartDataPoint[] = [];
+      
+      prices
+        .filter(point => {
           const isToday = point.start.toDateString() === now.toDateString();
           const isTomorrow = point.start.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          return isToday || isTomorrow;
+        })
+        .forEach(point => {
+          const isToday = point.start.toDateString() === now.toDateString();
           
-          if (!isToday && !isTomorrow) return null;
-          
-          return {
+          // Add start point
+          stepData.push({
             time: point.start.toLocaleTimeString('sv-SE', { 
               hour: '2-digit', 
               minute: '2-digit',
@@ -66,9 +71,24 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
             price: point.value,
             timestamp: point.start,
             day: isToday ? 'today' as const : 'tomorrow' as const
-          };
-        })
-        .filter((point): point is ChartDataPoint => point !== null);
+          });
+          
+          // Add end point for step effect (same price at end of hour)
+          const endTime = new Date(point.start.getTime() + 59 * 60 * 1000); // 59 minutes later
+          stepData.push({
+            time: endTime.toLocaleTimeString('sv-SE', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: false 
+            }),
+            price: point.value,
+            timestamp: endTime,
+            day: isToday ? 'today' as const : 'tomorrow' as const
+          });
+        });
+      
+      // Sort by timestamp
+      const transformedData = stepData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       setChartData(transformedData);
       setLastUpdate(new Date());
@@ -165,10 +185,16 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         </div>
       </div>
 
-      {/* Chart */}
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+            <defs>
+              <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
               dataKey="time" 
@@ -202,15 +228,16 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 label={{ value: `${actualDays}d avg`, position: "top", fontSize: 10 }}
               />
             )}
-            <Line 
-              type="linear" 
+            <Area 
+              type="stepAfter" 
               dataKey="price" 
-              stroke={getLineColor('price')}
+              stroke="hsl(var(--primary))"
               strokeWidth={2}
-              dot={{ fill: 'hsl(var(--primary))', strokeWidth: 0, r: 3 }}
-              activeDot={{ r: 5, fill: 'hsl(var(--primary))' }}
+              fill="url(#priceGradient)"
+              dot={false}
+              activeDot={{ r: 5, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
 
