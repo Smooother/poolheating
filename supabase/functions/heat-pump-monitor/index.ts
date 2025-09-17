@@ -97,12 +97,12 @@ function mapTuyaDataToHeatPumpStatus(tuyaData: TuyaDeviceData, deviceId: string)
   console.log('Looking for WinTemp, found:', statusMap.get('WinTemp'));
   
   // Map Tuya status codes to our heat pump data with proper number conversion
-  const currentTemp = Number(statusMap.get('CurrentTemp') || statusMap.get('Temp') || statusMap.get('current_temp') || '26.5');
-  const waterTemp = Number(statusMap.get('WInTemp') || statusMap.get('WaterTemp') || statusMap.get('water_temp') || '24.8');
-  const targetTemp = Number(statusMap.get('SetTemp') || statusMap.get('TargetTemp') || statusMap.get('target_temp') || '28.0');
-  const speedPercentage = Number(statusMap.get('SpeedPercentage') || statusMap.get('Speed') || statusMap.get('speed') || '75');
+  const currentTemp = Number(statusMap.get('CurrentTemp') ?? statusMap.get('Temp') ?? statusMap.get('current_temp') ?? '26.5');
+  const waterTemp = Number(statusMap.get('WInTemp') ?? statusMap.get('WaterTemp') ?? statusMap.get('water_temp') ?? '24.8');
+  const targetTemp = Number(statusMap.get('SetTemp') ?? statusMap.get('TargetTemp') ?? statusMap.get('target_temp') ?? '28.0');
+  const speedPercentage = Number(statusMap.get('SpeedPercentage') ?? statusMap.get('Speed') ?? statusMap.get('speed') ?? '0');
   const powerOn = statusMap.get('Power') === true || statusMap.get('switch') === true || statusMap.get('power') === true;
-  const mode = String(statusMap.get('SetMode') || statusMap.get('mode') || 'auto');
+  const mode = String(statusMap.get('SetMode') ?? statusMap.get('mode') ?? 'auto');
   
   // Determine power status based on power state and current activity
   let powerStatus: 'on' | 'off' | 'standby' = 'off';
