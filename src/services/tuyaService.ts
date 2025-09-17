@@ -106,6 +106,8 @@ class TuyaCloudService {
     clientSecret: string,
     accessToken?: string
   ): string {
+    // For token requests (no accessToken), use: clientId + timestamp + nonce + stringToSign
+    // For other requests (with accessToken), use: clientId + accessToken + timestamp + nonce + stringToSign
     const str = clientId + (accessToken || '') + timestamp + nonce + stringToSign;
     return CryptoJS.HmacSHA256(str, clientSecret).toString(CryptoJS.enc.Hex).toUpperCase();
   }
@@ -116,9 +118,12 @@ class TuyaCloudService {
   private generateHeaders(method: string, path: string, body?: any, accessToken?: string) {
     const timestamp = Date.now().toString();
     const nonce = Math.random().toString(36).substring(2, 15);
-    const stringToSign = method + '\n' + 
-                        CryptoJS.SHA256(body ? JSON.stringify(body) : '').toString(CryptoJS.enc.Hex) + '\n' +
-                        '' + '\n' + path;
+    
+    // Generate content hash (empty for GET requests)
+    const contentHash = CryptoJS.SHA256(body ? JSON.stringify(body) : '').toString(CryptoJS.enc.Hex);
+    
+    // Build stringToSign exactly like Postman script
+    const stringToSign = [method, contentHash, '', path].join('\n');
 
     const signature = this.generateSignature(
       this.config.clientId,
@@ -347,6 +352,15 @@ class TuyaCloudService {
         console.error('❌ Tuya Cloud configuration incomplete');
         return false;
       }
+      
+      console.log('🔄 Testing Tuya Cloud connection...');
+      console.log('Config check:', {
+        baseUrl: this.config.baseUrl,
+        clientId: this.config.clientId.substring(0, 8) + '...',
+        hasSecret: !!this.config.clientSecret,
+        uid: this.config.uid,
+        deviceId: this.config.deviceId
+      });
       
       const token = await this.getValidToken();
       console.log('✅ Tuya Cloud connection successful');
