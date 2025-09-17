@@ -203,7 +203,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               />
             )}
             <Line 
-              type="monotone" 
+              type="linear" 
               dataKey="price" 
               stroke={getLineColor('price')}
               strokeWidth={2}

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LivePriceTest } from "@/components/integrations/LivePriceTest";
+import { TuyaTest } from "@/components/integrations/TuyaTest";
 
 interface IntegrationStatus {
   connected: boolean;
@@ -338,6 +339,22 @@ const Integrations = () => {
                   Test Connection
                 </Button>
               </div>
+            </div>
+          </Card>
+
+          {/* Tuya Cloud Integration Test */}
+          <Card className="status-card">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Cloud className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Tuya Cloud Integration</h3>
+                  <p className="text-sm text-muted-foreground">Test and manage Tuya heat pump device</p>
+                </div>
+              </div>
+              <TuyaTest />
             </div>
           </Card>
 
