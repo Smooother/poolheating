@@ -1,1 +1,4 @@
 project_id = "bagcdhlbkicwtepflczr"
+
+[functions.tuya-proxy]
+verify_jwt = false
