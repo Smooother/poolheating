@@ -50,7 +50,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       setActualDays(usedDays);
 
       // Transform data for step chart - each price is valid for full hour
-      const stepData: ChartDataPoint[] = [];
+      const transformedData: ChartDataPoint[] = [];
       
       prices
         .filter(point => {
@@ -62,7 +62,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           const isToday = point.start.toDateString() === now.toDateString();
           
           // Add start point
-          stepData.push({
+          transformedData.push({
             time: point.start.toLocaleTimeString('sv-SE', { 
               hour: '2-digit', 
               minute: '2-digit',
@@ -75,7 +75,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           
           // Add end point for step effect (same price at end of hour)
           const endTime = new Date(point.start.getTime() + 59 * 60 * 1000); // 59 minutes later
-          stepData.push({
+          transformedData.push({
             time: endTime.toLocaleTimeString('sv-SE', { 
               hour: '2-digit', 
               minute: '2-digit',
@@ -88,7 +88,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         });
       
       // Sort by timestamp
-      const transformedData = stepData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      transformedData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       setChartData(transformedData);
       setLastUpdate(new Date());
