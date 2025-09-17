@@ -10,6 +10,7 @@ interface ForecastPoint {
   priceState: 'low' | 'normal' | 'high';
   actualPrice: number;
   timestamp: Date;
+  ts: number;
   day: 'yesterday' | 'today' | 'tomorrow';
   isCurrentHour?: boolean;
 }
@@ -136,6 +137,7 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
           priceState,
           actualPrice: price.value,
           timestamp: price.start,
+          ts: price.start.getTime(),
           day: dayLabel,
           isCurrentHour
         };
@@ -246,10 +248,17 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
           <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
-              dataKey="time" 
+              dataKey="ts" 
+              type="number"
+              scale="time"
+              domain={["dataMin", "dataMax"]}
               stroke="hsl(var(--muted-foreground))"
               fontSize={10}
-              tickFormatter={formatXAxisTick}
+              tickFormatter={(value: number) => {
+                const d = new Date(value);
+                const hour = String(d.getHours()).padStart(2, '0');
+                return parseInt(hour) % 4 === 0 ? hour : '';
+              }}
               height={40}
               interval={0}
             />

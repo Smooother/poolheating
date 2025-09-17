@@ -10,6 +10,7 @@ interface ChartDataPoint {
   time: string;
   price: number;
   timestamp: Date;
+  ts: number;
   day: 'yesterday' | 'today' | 'tomorrow';
   isCurrentHour?: boolean;
 }
@@ -79,6 +80,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           time: point.start.getHours().toString().padStart(2, '0'),
           price: point.value,
           timestamp: point.start,
+          ts: point.start.getTime(),
           day: dayLabel,
           isCurrentHour
         });
@@ -123,14 +125,13 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
     return [`${(value * 100).toFixed(1)} öre/kWh`, 'Price'];
   };
 
-  const formatTooltipLabel = (label: string, payload: any[]) => {
-    if (payload && payload[0]) {
-      const data = payload[0].payload as ChartDataPoint;
-      const date = data.timestamp.toLocaleDateString('sv-SE', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      return `${date} ${label}`;
+  const formatTooltipLabel = (label: any, payload: any[]) => {
+    const ts = typeof label === 'number' ? label : (payload && payload[0] ? (payload[0].payload as ChartDataPoint).ts : undefined);
+    if (typeof ts === 'number') {
+      const d = new Date(ts);
+      const date = d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+      const hour = String(d.getHours()).padStart(2, '0');
+      return `${date} ${hour}:00`;
     }
     return label;
   };
@@ -145,21 +146,22 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
     return hour % 4 === 0 ? tickItem : '';
   };
 
-  // Get day break positions (midnight hours where day changes)
+  // Get day break positions (midnight boundaries) as timestamps
   const getDayBreaks = () => {
-    const breaks: string[] = [];
-    const seen = new Set<string>();
-    
-    chartData.forEach((point, index) => {
-      if (point.time === '00' && index > 0) {
-        const dayKey = point.timestamp.toDateString();
-        if (!seen.has(dayKey)) {
-          breaks.push(point.time);
-          seen.add(dayKey);
-        }
-      }
-    });
-    
+    if (!chartData.length) return [] as number[];
+    const minTs = Math.min(...chartData.map(p => p.ts));
+    const maxTs = Math.max(...chartData.map(p => p.ts));
+
+    const first = new Date(minTs);
+    const firstNextMidnight = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 1, 0, 0, 0, 0);
+
+    const breaks: number[] = [];
+    for (let t = firstNextMidnight.getTime(); t <= maxTs; ) {
+      breaks.push(t);
+      const next = new Date(t);
+      next.setDate(next.getDate() + 1);
+      t = next.getTime();
+    }
     return breaks;
   };
 
@@ -213,10 +215,17 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
-              dataKey="time" 
+              dataKey="ts" 
+              type="number"
+              scale="time"
+              domain={["dataMin", "dataMax"]}
               stroke="hsl(var(--muted-foreground))"
               fontSize={10}
-              tickFormatter={formatXAxisTick}
+              tickFormatter={(value: number) => {
+                const d = new Date(value);
+                const hour = String(d.getHours()).padStart(2, '0');
+                return parseInt(hour) % 4 === 0 ? hour : '';
+              }}
               height={40}
               interval={0}
             />
@@ -236,34 +245,6 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 fontSize: '12px',
               }}
             />
-            {/* Day break lines */}
-            {getDayBreaks().map((breakTime, index) => (
-              <ReferenceLine 
-                key={`day-break-${index}`}
-                x={breakTime} 
-                stroke="hsl(var(--muted-foreground))" 
-                strokeWidth={2}
-                strokeOpacity={0.6}
-              />
-            ))}
-            {/* Current time indicator */}
-            {currentPriceData && (
-              <ReferenceLine 
-                x={currentPriceData.time} 
-                stroke="hsl(var(--destructive))" 
-                strokeWidth={2}
-                strokeDasharray="2 2"
-              />
-            )}
-            {averagePrice > 0 && (
-              <ReferenceLine 
-                y={averagePrice} 
-                stroke="hsl(var(--muted-foreground))" 
-                strokeDasharray="5 5"
-                strokeOpacity={0.7}
-                label={{ value: `${actualDays}d avg`, position: "top", fontSize: 9 }}
-              />
-            )}
             <Area 
               type="stepAfter" 
               dataKey="price" 
@@ -273,6 +254,32 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               dot={false}
               activeDot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
+            {/* Day break lines (on top) */}
+            {getDayBreaks().map((breakTime, index) => (
+              <ReferenceLine 
+                key={`day-break-${index}`}
+                x={breakTime} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeWidth={2}
+                strokeOpacity={0.6}
+              />
+            ))}
+            {/* Current time indicator (on top) */}
+            <ReferenceLine 
+              x={Date.now()} 
+              stroke="hsl(var(--destructive))" 
+              strokeWidth={2}
+              strokeDasharray="2 2"
+            />
+            {averagePrice > 0 && (
+              <ReferenceLine 
+                y={averagePrice} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeDasharray="5 5"
+                strokeOpacity={0.7}
+                label={{ value: `${actualDays}d avg`, position: "top", fontSize: 9 }}
+              />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>
