@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -18,14 +18,18 @@ import {
   Settings2,
   Clock,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  PlayCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/contexts/SettingsContext";
+import { AutomationService } from "@/services/automationService";
+import { useState } from "react";
 
 const Control = () => {
   const { toast } = useToast();
   const { settings, updateSetting, resetToDefaults, saveSettings } = useSettings();
+  const [isTestingAutomation, setIsTestingAutomation] = useState(false);
 
   const handleSettingChange = <K extends keyof typeof settings>(
     key: K,
@@ -48,6 +52,34 @@ const Control = () => {
       title: "Settings Reset",
       description: "All parameters have been reset to defaults.",
     });
+  };
+
+  const handleTestAutomation = async () => {
+    setIsTestingAutomation(true);
+    try {
+      const success = await AutomationService.triggerAutomation();
+      
+      if (success) {
+        toast({
+          title: "Automation Test Successful",
+          description: "Price automation has been manually triggered. Check the logs for results.",
+        });
+      } else {
+        toast({
+          title: "Automation Test Failed",
+          description: "Failed to trigger automation. Please check the logs.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred during automation test",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTestingAutomation(false);
+    }
   };
 
   return (
@@ -410,6 +442,35 @@ const Control = () => {
                   <p>• Minimum {settings.antiShortCycle} minutes between adjustments</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Test Automation */}
+        <Card className="status-card">
+          <div className="p-6 space-y-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-accent/10 rounded-lg">
+                <PlayCircle className="h-5 w-5 text-accent" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Test Automation</h3>
+                <p className="text-sm text-muted-foreground">Manually trigger price automation</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Button 
+                onClick={handleTestAutomation}
+                disabled={isTestingAutomation}
+                className="w-full"
+              >
+                {isTestingAutomation ? "Testing..." : "Test Price Automation"}
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                This will run the automation logic once and log the results. 
+                Check the dashboard for any temperature changes.
+              </p>
             </div>
           </div>
         </Card>
