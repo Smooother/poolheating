@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, ReferenceDot, Tooltip } from 'recharts';
 import { fetchStoredPrices, getLatestPriceDate } from '@/services/priceDataService';
 import { calculateRollingAverage } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
@@ -25,6 +25,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [averagePrice, setAveragePrice] = useState(0);
   const [actualDays, setActualDays] = useState(0);
+  const [currentPriceData, setCurrentPriceData] = useState<ChartDataPoint | null>(null);
 
   const fetchLivePriceData = async () => {
     try {
@@ -59,8 +60,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           // Add start point
           transformedData.push({
             time: point.start.toLocaleTimeString('sv-SE', { 
-              hour: '2-digit', 
-              minute: '2-digit',
+              hour: '2-digit',
               hour12: false 
             }),
             price: point.value,
@@ -72,8 +72,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
           const endTime = new Date(point.start.getTime() + 59 * 60 * 1000); // 59 minutes later
           transformedData.push({
             time: endTime.toLocaleTimeString('sv-SE', { 
-              hour: '2-digit', 
-              minute: '2-digit',
+              hour: '2-digit',
               hour12: false 
             }),
             price: point.value,
@@ -84,6 +83,14 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       
       // Sort by timestamp
       transformedData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+      // Find current price point for marker
+      const currentTime = new Date();
+      const currentHour = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), currentTime.getHours());
+      const currentData = transformedData.find(point => 
+        Math.abs(point.timestamp.getTime() - currentHour.getTime()) < 30 * 60 * 1000 // Within 30 minutes
+      );
+      setCurrentPriceData(currentData || null);
 
       setChartData(transformedData);
       setLastUpdate(new Date());
@@ -238,6 +245,16 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               dot={false}
               activeDot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
+            {currentPriceData && (
+              <ReferenceDot 
+                x={currentPriceData.time} 
+                y={currentPriceData.price} 
+                r={4}
+                fill="hsl(var(--destructive))"
+                stroke="hsl(var(--background))"
+                strokeWidth={2}
+              />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>
