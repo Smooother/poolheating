@@ -147,37 +147,59 @@ class TuyaCloudService {
     const token = await this.getValidToken();
     const headers = this.generateHeaders(method, path, body, token.access_token);
     
-    const response = await fetch(`${this.config.baseUrl}${path}`, {
-      method,
-      headers,
-      ...(body && { body: JSON.stringify(body) })
-    });
+    try {
+      const response = await fetch(`${this.config.baseUrl}${path}`, {
+        method,
+        headers,
+        mode: 'cors',
+        ...(body && { body: JSON.stringify(body) })
+      });
 
-    const data = await response.json();
-
-    if (!data.success) {
-      // If token expired, try to refresh and retry once
-      if (data.code === 1010) {
-        await this.refreshToken();
-        const newToken = await this.getValidToken();
-        const newHeaders = this.generateHeaders(method, path, body, newToken.access_token);
-        
-        const retryResponse = await fetch(`${this.config.baseUrl}${path}`, {
-          method,
-          headers: newHeaders,
-          ...(body && { body: JSON.stringify(body) })
-        });
-
-        const retryData = await retryResponse.json();
-        if (!retryData.success) {
-          throw new Error(`Tuya API Error: ${retryData.msg} (Code: ${retryData.code})`);
+      // Check if the response is ok and not blocked by CORS
+      if (!response.ok) {
+        if (response.status === 0) {
+          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. This requires a backend service.');
         }
-        return retryData;
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      throw new Error(`Tuya API Error: ${data.msg} (Code: ${data.code})`);
-    }
 
-    return data;
+      const data = await response.json();
+
+      if (!data.success) {
+        // If token expired, try to refresh and retry once
+        if (data.code === 1010) {
+          await this.refreshToken();
+          const newToken = await this.getValidToken();
+          const newHeaders = this.generateHeaders(method, path, body, newToken.access_token);
+          
+          const retryResponse = await fetch(`${this.config.baseUrl}${path}`, {
+            method,
+            headers: newHeaders,
+            mode: 'cors',
+            ...(body && { body: JSON.stringify(body) })
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+          }
+
+          const retryData = await retryResponse.json();
+          if (!retryData.success) {
+            throw new Error(`Tuya API Error: ${retryData.msg} (Code: ${retryData.code})`);
+          }
+          return retryData;
+        }
+        throw new Error(`Tuya API Error: ${data.msg} (Code: ${data.code})`);
+      }
+
+      return data;
+    } catch (error: any) {
+      // Handle network errors (CORS, etc.)
+      if (error.name === 'TypeError' && error.message === 'Load failed') {
+        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. The Tuya Cloud API does not allow direct browser access due to CORS restrictions. You need a backend service or proxy to make these API calls.');
+      }
+      throw error;
+    }
   }
 
   /**
@@ -187,29 +209,44 @@ class TuyaCloudService {
     const path = '/v1.0/token?grant_type=1';
     const headers = this.generateHeaders('GET', path);
 
-    const response = await fetch(`${this.config.baseUrl}${path}`, {
-      method: 'GET',
-      headers
-    });
+    try {
+      const response = await fetch(`${this.config.baseUrl}${path}`, {
+        method: 'GET',
+        headers,
+        mode: 'cors'
+      });
 
-    const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 0) {
+          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. This requires a backend service.');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-    if (!data.success) {
-      throw new Error(`Failed to get Tuya token: ${data.msg} (Code: ${data.code})`);
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(`Failed to get Tuya token: ${data.msg} (Code: ${data.code})`);
+      }
+
+      const token: TuyaToken = {
+        access_token: data.result.access_token,
+        refresh_token: data.result.refresh_token,
+        expires_in: data.result.expire_time,
+        expires_at: Date.now() + (data.result.expire_time * 1000)
+      };
+
+      // Store token in localStorage
+      localStorage.setItem(this.tokenKey, JSON.stringify(token));
+      this.token = token;
+
+      return token;
+    } catch (error: any) {
+      if (error.name === 'TypeError' && error.message === 'Load failed') {
+        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser. The Tuya Cloud API does not allow direct browser access due to CORS restrictions. You need a backend service or proxy to make these API calls.');
+      }
+      throw error;
     }
-
-    const token: TuyaToken = {
-      access_token: data.result.access_token,
-      refresh_token: data.result.refresh_token,
-      expires_in: data.result.expire_time,
-      expires_at: Date.now() + (data.result.expire_time * 1000)
-    };
-
-    // Store token in localStorage
-    localStorage.setItem(this.tokenKey, JSON.stringify(token));
-    this.token = token;
-
-    return token;
   }
 
   /**
@@ -227,8 +264,17 @@ class TuyaCloudService {
     try {
       const response = await fetch(`${this.config.baseUrl}${path}`, {
         method: 'GET',
-        headers
+        headers,
+        mode: 'cors'
       });
+
+      if (!response.ok) {
+        if (response.status === 0) {
+          throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser.');
+        }
+        // If refresh fails, get new token
+        return this.getAccessToken();
+      }
 
       const data = await response.json();
 
@@ -248,7 +294,10 @@ class TuyaCloudService {
       this.token = token;
 
       return token;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'TypeError' && error.message === 'Load failed') {
+        throw new Error('CORS_ERROR: Cannot connect to Tuya API from browser.');
+      }
       // If refresh fails, get new token
       return this.getAccessToken();
     }

@@ -86,12 +86,21 @@ export const TuyaTest = () => {
 
     } catch (error: any) {
       console.error('Tuya test failed:', error);
+      
+      let errorMessage = error.message || "Unknown error occurred";
+      let errorTitle = "Test Failed";
+      
+      if (error.message?.includes('CORS_ERROR')) {
+        errorTitle = "CORS Restriction";
+        errorMessage = "Tuya Cloud API cannot be accessed directly from the browser due to CORS restrictions. This integration requires a backend service to work properly.";
+      }
+      
       toast({
-        title: "Test Failed",
-        description: error.message || "Unknown error occurred",
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive",
       });
-      setResults({ error: error.message });
+      setResults({ error: errorMessage, isCorsError: error.message?.includes('CORS_ERROR') });
     } finally {
       setTesting(false);
     }
@@ -280,7 +289,18 @@ export const TuyaTest = () => {
                 
                 {results.error ? (
                   <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <p className="text-destructive">{results.error}</p>
+                    <p className="text-destructive font-medium mb-2">{results.isCorsError ? 'CORS Restriction Detected' : 'Error'}</p>
+                    <p className="text-destructive text-sm">{results.error}</p>
+                    {results.isCorsError && (
+                      <div className="mt-3 p-2 bg-muted/50 border rounded text-sm">
+                        <p className="font-medium mb-1">Possible Solutions:</p>
+                        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                          <li>Use Supabase Edge Functions for backend API calls</li>
+                          <li>Set up a proxy server to handle Tuya API requests</li>
+                          <li>Use Tuya's IoT Platform for device management</li>
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
