@@ -169,10 +169,6 @@ export const LivePriceTest = () => {
             <span>Elpriset Just Nu (Free)</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Bidding Zone:</span>
-            <span>SE3 - Southern Sweden</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Last Update:</span>
             <span>{data.lastUpdate.toLocaleTimeString('sv-SE')}</span>
           </div>
