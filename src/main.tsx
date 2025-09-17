@@ -6,6 +6,7 @@ import { SettingsProvider } from "./contexts/SettingsContext.tsx";
 
 // Test Tuya connection on startup
 import { tuyaService } from "./services/tuyaService";
+import { triggerPriceCollection } from "./services/priceDataService";
 
 // Test Tuya connection
 tuyaService.testConnection().then((connected) => {
@@ -16,6 +17,13 @@ tuyaService.testConnection().then((connected) => {
   }
 }).catch((error) => {
   console.error('❌ Tuya Cloud connection test error:', error);
+});
+
+// Automatically collect price data on startup
+triggerPriceCollection().then(() => {
+  console.log('✅ Automatic price data collection started');
+}).catch((error) => {
+  console.error('❌ Automatic price data collection failed:', error);
 });
 
 createRoot(document.getElementById("root")!).render(
