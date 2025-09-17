@@ -32,64 +32,63 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
     try {
       setLoading(true);
       
-      // Calculate date range for yesterday, today and tomorrow (48 hours total)
+      // Calculate extended date range to ensure we get historical data
       const now = new Date();
-      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      const dayAfterTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+      const startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
+      const endDate = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours forward
 
       // Fetch price data from Supabase
-      const prices = await fetchStoredPrices(currentBiddingZone, yesterday, dayAfterTomorrow);
+      const prices = await fetchStoredPrices(currentBiddingZone, startDate, endDate);
+      
+      if (prices.length === 0) {
+        console.warn('No price data available');
+        return;
+      }
+
+      console.log(`Fetched ${prices.length} price points from ${startDate.toISOString()} to ${endDate.toISOString()}`);
       
       // Calculate rolling average for reference line
       const { average: avgPrice, actualDays: usedDays } = calculateRollingAverage(prices, settings.rollingDays);
       setAveragePrice(avgPrice);
       setActualDays(usedDays);
 
-      // Transform data for step chart - each price is valid for full hour
+      // Transform data for step chart
       const transformedData: ChartDataPoint[] = [];
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       
-      prices
-        .filter(point => {
-          // Include data from yesterday evening to tomorrow
-          const yesterdayDate = yesterday.toDateString();
-          const todayDate = now.toDateString();
-          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-          const pointDate = point.start.toDateString();
-          
-          return pointDate === yesterdayDate || pointDate === todayDate || pointDate === tomorrowDate;
-        })
-        .forEach(point => {
-          const yesterdayDate = yesterday.toDateString();
-          const todayDate = now.toDateString();
-          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-          const pointDate = point.start.toDateString();
-          
-          let dayLabel: 'yesterday' | 'today' | 'tomorrow';
-          if (pointDate === yesterdayDate) dayLabel = 'yesterday';
-          else if (pointDate === todayDate) dayLabel = 'today';
-          else dayLabel = 'tomorrow';
-          
-          const isCurrentHour = point.start.getHours() === currentHour.getHours() && 
-                               point.start.toDateString() === currentHour.toDateString();
-          
-          // Add start point
-          transformedData.push({
-            time: point.start.getHours().toString().padStart(2, '0'),
-            price: point.value,
-            timestamp: point.start,
-            day: dayLabel,
-            isCurrentHour
-          });
-        });
+      // Sort all prices by timestamp first
+      const sortedPrices = [...prices].sort((a, b) => a.start.getTime() - b.start.getTime());
       
-      // Sort by timestamp
-      transformedData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      sortedPrices.forEach(point => {
+        const isCurrentHour = point.start.getHours() === currentHour.getHours() && 
+                             point.start.toDateString() === currentHour.toDateString();
+        
+        const todayDate = now.toDateString();
+        const pointDate = point.start.toDateString();
+        
+        let dayLabel: 'yesterday' | 'today' | 'tomorrow';
+        if (point.start < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+          dayLabel = 'yesterday';
+        } else if (pointDate === todayDate) {
+          dayLabel = 'today';
+        } else {
+          dayLabel = 'tomorrow';
+        }
+        
+        transformedData.push({
+          time: point.start.getHours().toString().padStart(2, '0'),
+          price: point.value,
+          timestamp: point.start,
+          day: dayLabel,
+          isCurrentHour
+        });
+      });
 
       // Find current price point for marker
       const currentData = transformedData.find(point => point.isCurrentHour);
       setCurrentPriceData(currentData || null);
 
+      console.log(`Transformed data: ${transformedData.length} points, current hour found: ${!!currentData}`);
       setChartData(transformedData);
       setLastUpdate(new Date());
       
@@ -146,11 +145,22 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
     return hour % 4 === 0 ? tickItem : '';
   };
 
-  // Get day break positions (midnight hours)
+  // Get day break positions (midnight hours where day changes)
   const getDayBreaks = () => {
-    return chartData
-      .filter(point => point.time === '00' && point.day !== 'yesterday')
-      .map(point => point.time);
+    const breaks: string[] = [];
+    const seen = new Set<string>();
+    
+    chartData.forEach((point, index) => {
+      if (point.time === '00' && index > 0) {
+        const dayKey = point.timestamp.toDateString();
+        if (!seen.has(dayKey)) {
+          breaks.push(point.time);
+          seen.add(dayKey);
+        }
+      }
+    });
+    
+    return breaks;
   };
 
   if (loading && chartData.length === 0) {

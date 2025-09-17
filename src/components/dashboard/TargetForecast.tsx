@@ -81,73 +81,67 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       
       const weather = await fetchWeatherData();
       
-      // Get historical and forecast data (yesterday, today, tomorrow - same as price chart)
+      // Match the same date range as price chart for consistency
       const now = new Date();
-      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      const dayAfterTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+      const startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
+      const endDate = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours forward
       
-      const prices = await fetchStoredPrices(biddingZone, yesterday, dayAfterTomorrow);
+      const prices = await fetchStoredPrices(biddingZone, startDate, endDate);
       
       if (prices.length === 0) {
         console.warn('No price data available for forecast');
         return;
       }
 
-      // Calculate rolling average for price classification with adaptive days
+      console.log(`Forecast: Fetched ${prices.length} price points`);
+
+      // Calculate rolling average for price classification
       const { average: rollingAvg } = calculateRollingAverage(prices, settings.rollingDays);
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       
       // Create forecast data points including historical data
-      const forecast: ForecastPoint[] = prices
-        .filter(point => {
-          // Include data from yesterday evening to tomorrow
-          const yesterdayDate = yesterday.toDateString();
-          const todayDate = now.toDateString();
-          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-          const pointDate = point.start.toDateString();
-          
-          return pointDate === yesterdayDate || pointDate === todayDate || pointDate === tomorrowDate;
-        })
-        .map(price => {
-          const yesterdayDate = yesterday.toDateString();
-          const todayDate = now.toDateString();
-          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-          const pointDate = price.start.toDateString();
-          
-          let dayLabel: 'yesterday' | 'today' | 'tomorrow';
-          if (pointDate === yesterdayDate) dayLabel = 'yesterday';
-          else if (pointDate === todayDate) dayLabel = 'today';
-          else dayLabel = 'tomorrow';
+      const sortedPrices = [...prices].sort((a, b) => a.start.getTime() - b.start.getTime());
+      
+      const forecast: ForecastPoint[] = sortedPrices.map(price => {
+        const isCurrentHour = price.start.getHours() === currentHour.getHours() && 
+                             price.start.toDateString() === currentHour.toDateString();
 
-          const priceState = classifyPrice(
-            price.value, 
-            rollingAvg, 
-            settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', 
-            settings
-          );
-          const targetTemp = calculateTargetTemperature(
-            settings.baseSetpoint, 
-            priceState,
-            weather.temperature
-          );
+        const todayDate = now.toDateString();
+        const pointDate = price.start.toDateString();
+        
+        let dayLabel: 'yesterday' | 'today' | 'tomorrow';
+        if (price.start < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+          dayLabel = 'yesterday';
+        } else if (pointDate === todayDate) {
+          dayLabel = 'today';
+        } else {
+          dayLabel = 'tomorrow';
+        }
 
-          const isCurrentHour = price.start.getHours() === currentHour.getHours() && 
-                               price.start.toDateString() === currentHour.toDateString();
+        const priceState = classifyPrice(
+          price.value, 
+          rollingAvg, 
+          settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', 
+          settings
+        );
+        const targetTemp = calculateTargetTemperature(
+          settings.baseSetpoint, 
+          priceState,
+          weather.temperature
+        );
 
-          return {
-            time: price.start.getHours().toString().padStart(2, '0'),
-            targetTemp,
-            priceState,
-            actualPrice: price.value,
-            timestamp: price.start,
-            day: dayLabel,
-            isCurrentHour
-          };
-        });
+        return {
+          time: price.start.getHours().toString().padStart(2, '0'),
+          targetTemp,
+          priceState,
+          actualPrice: price.value,
+          timestamp: price.start,
+          day: dayLabel,
+          isCurrentHour
+        };
+      });
 
-      // Sort by timestamp
-      forecast.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
+      console.log(`Forecast: Transformed ${forecast.length} points, current hour found: ${forecast.some(f => f.isCurrentHour)}`);
       setForecastData(forecast);
     } catch (error) {
       console.error('Failed to fetch forecast data:', error);
@@ -175,11 +169,22 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
     return hour % 4 === 0 ? tickItem : '';
   };
 
-  // Get day break positions (midnight hours)
+  // Get day break positions (midnight hours where day changes)
   const getDayBreaks = () => {
-    return forecastData
-      .filter(point => point.time === '00' && point.day !== 'yesterday')
-      .map(point => point.time);
+    const breaks: string[] = [];
+    const seen = new Set<string>();
+    
+    forecastData.forEach((point, index) => {
+      if (point.time === '00' && index > 0) {
+        const dayKey = point.timestamp.toDateString();
+        if (!seen.has(dayKey)) {
+          breaks.push(point.time);
+          seen.add(dayKey);
+        }
+      }
+    });
+    
+    return breaks;
   };
 
   // Get current time point
