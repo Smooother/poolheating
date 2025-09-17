@@ -10,7 +10,8 @@ interface ChartDataPoint {
   time: string;
   price: number;
   timestamp: Date;
-  day: 'today' | 'tomorrow';
+  day: 'yesterday' | 'today' | 'tomorrow';
+  isCurrentHour?: boolean;
 }
 
 interface PriceChartProps {
@@ -31,14 +32,13 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
     try {
       setLoading(true);
       
-      // Calculate date range for today and tomorrow
+      // Calculate date range for yesterday, today and tomorrow (48 hours total)
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 2); // Include full tomorrow
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const dayAfterTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
 
       // Fetch price data from Supabase
-      const prices = await fetchStoredPrices(currentBiddingZone, today, tomorrow);
+      const prices = await fetchStoredPrices(currentBiddingZone, yesterday, dayAfterTomorrow);
       
       // Calculate rolling average for reference line
       const { average: avgPrice, actualDays: usedDays } = calculateRollingAverage(prices, settings.rollingDays);
@@ -47,37 +47,39 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
 
       // Transform data for step chart - each price is valid for full hour
       const transformedData: ChartDataPoint[] = [];
+      const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       
       prices
         .filter(point => {
-          const isToday = point.start.toDateString() === now.toDateString();
-          const isTomorrow = point.start.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-          return isToday || isTomorrow;
+          // Include data from yesterday evening to tomorrow
+          const yesterdayDate = yesterday.toDateString();
+          const todayDate = now.toDateString();
+          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          const pointDate = point.start.toDateString();
+          
+          return pointDate === yesterdayDate || pointDate === todayDate || pointDate === tomorrowDate;
         })
         .forEach(point => {
-          const isToday = point.start.toDateString() === now.toDateString();
+          const yesterdayDate = yesterday.toDateString();
+          const todayDate = now.toDateString();
+          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          const pointDate = point.start.toDateString();
+          
+          let dayLabel: 'yesterday' | 'today' | 'tomorrow';
+          if (pointDate === yesterdayDate) dayLabel = 'yesterday';
+          else if (pointDate === todayDate) dayLabel = 'today';
+          else dayLabel = 'tomorrow';
+          
+          const isCurrentHour = point.start.getHours() === currentHour.getHours() && 
+                               point.start.toDateString() === currentHour.toDateString();
           
           // Add start point
           transformedData.push({
-            time: point.start.toLocaleTimeString('sv-SE', { 
-              hour: '2-digit',
-              hour12: false 
-            }),
+            time: point.start.getHours().toString().padStart(2, '0'),
             price: point.value,
             timestamp: point.start,
-            day: isToday ? 'today' as const : 'tomorrow' as const
-          });
-          
-          // Add end point for step effect (same price at end of hour)
-          const endTime = new Date(point.start.getTime() + 59 * 60 * 1000); // 59 minutes later
-          transformedData.push({
-            time: endTime.toLocaleTimeString('sv-SE', { 
-              hour: '2-digit',
-              hour12: false 
-            }),
-            price: point.value,
-            timestamp: endTime,
-            day: isToday ? 'today' as const : 'tomorrow' as const
+            day: dayLabel,
+            isCurrentHour
           });
         });
       
@@ -85,30 +87,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       transformedData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       // Find current price point for marker
-      const currentTime = new Date();
-      const currentHour = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), currentTime.getHours());
-      
-      // Look for data point that matches current hour or is closest to current time
-      let currentData = transformedData.find(point => {
-        const pointHour = new Date(point.timestamp.getFullYear(), point.timestamp.getMonth(), point.timestamp.getDate(), point.timestamp.getHours());
-        return pointHour.getTime() === currentHour.getTime();
-      });
-      
-      // If no exact match, find the closest data point to current time
-      if (!currentData && transformedData.length > 0) {
-        currentData = transformedData.reduce((closest, point) => {
-          const pointDiff = Math.abs(point.timestamp.getTime() - currentTime.getTime());
-          const closestDiff = Math.abs(closest.timestamp.getTime() - currentTime.getTime());
-          return pointDiff < closestDiff ? point : closest;
-        });
-        
-        // Only use if within 2 hours of current time
-        const timeDiff = Math.abs(currentData.timestamp.getTime() - currentTime.getTime());
-        if (timeDiff > 2 * 60 * 60 * 1000) {
-          currentData = undefined;
-        }
-      }
-      
+      const currentData = transformedData.find(point => point.isCurrentHour);
       setCurrentPriceData(currentData || null);
 
       setChartData(transformedData);
@@ -162,14 +141,16 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
   };
 
   const formatXAxisTick = (tickItem: string, index: number) => {
-    // Show fewer ticks on mobile to avoid crowding
-    const isMobile = window.innerWidth < 640; // sm breakpoint
-    const interval = isMobile ? 6 : 4;
-    
-    if (index % interval === 0) {
-      return tickItem;
-    }
-    return '';
+    // Show every 4th hour: 04, 08, 12, 16, 20, 00, 04, etc.
+    const hour = parseInt(tickItem);
+    return hour % 4 === 0 ? tickItem : '';
+  };
+
+  // Get day break positions (midnight hours)
+  const getDayBreaks = () => {
+    return chartData
+      .filter(point => point.time === '00' && point.day !== 'yesterday')
+      .map(point => point.time);
   };
 
   if (loading && chartData.length === 0) {
@@ -188,7 +169,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
       {/* Header with status */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h4 className="text-sm font-medium">Today & Tomorrow Prices</h4>
+          <h4 className="text-sm font-medium">Electricity Prices</h4>
           <p className="text-xs text-muted-foreground">
             <span className="block sm:inline">{chartData.length} hours • Prices in öre/kWh</span>
             <span className="block sm:inline sm:ml-1">• {currentBiddingZone}</span>
@@ -212,7 +193,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
 
       <div className="h-48 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
@@ -226,10 +207,8 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               stroke="hsl(var(--muted-foreground))"
               fontSize={10}
               tickFormatter={formatXAxisTick}
-              angle={-45}
-              textAnchor="end"
-              height={50}
-              interval="preserveStartEnd"
+              height={40}
+              interval={0}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
@@ -247,11 +226,31 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 fontSize: '12px',
               }}
             />
+            {/* Day break lines */}
+            {getDayBreaks().map((breakTime, index) => (
+              <ReferenceLine 
+                key={`day-break-${index}`}
+                x={breakTime} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeWidth={2}
+                strokeOpacity={0.6}
+              />
+            ))}
+            {/* Current time indicator */}
+            {currentPriceData && (
+              <ReferenceLine 
+                x={currentPriceData.time} 
+                stroke="hsl(var(--destructive))" 
+                strokeWidth={2}
+                strokeDasharray="2 2"
+              />
+            )}
             {averagePrice > 0 && (
               <ReferenceLine 
                 y={averagePrice} 
                 stroke="hsl(var(--muted-foreground))" 
                 strokeDasharray="5 5"
+                strokeOpacity={0.7}
                 label={{ value: `${actualDays}d avg`, position: "top", fontSize: 9 }}
               />
             )}
@@ -264,16 +263,6 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
               dot={false}
               activeDot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
-            {currentPriceData && (
-              <ReferenceDot 
-                x={currentPriceData.time} 
-                y={currentPriceData.price} 
-                r={6}
-                fill="hsl(var(--destructive))"
-                stroke="hsl(var(--background))"
-                strokeWidth={3}
-              />
-            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -292,8 +281,8 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         )}
         {currentPriceData && (
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-destructive"></div>
-            <span className="text-muted-foreground">Current Price</span>
+            <div className="w-3 h-0.5 bg-destructive border-t-2 border-dashed border-destructive"></div>
+            <span className="text-muted-foreground">Current Time</span>
           </div>
         )}
       </div>

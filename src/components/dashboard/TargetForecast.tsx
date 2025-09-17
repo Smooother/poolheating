@@ -10,6 +10,8 @@ interface ForecastPoint {
   priceState: 'low' | 'normal' | 'high';
   actualPrice: number;
   timestamp: Date;
+  day: 'yesterday' | 'today' | 'tomorrow';
+  isCurrentHour?: boolean;
 }
 
 interface WeatherData {
@@ -79,11 +81,12 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       
       const weather = await fetchWeatherData();
       
-      // Get price forecast for next 24 hours from Supabase
+      // Get historical and forecast data (yesterday, today, tomorrow - same as price chart)
       const now = new Date();
-      const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const dayAfterTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
       
-      const prices = await fetchStoredPrices(biddingZone, now, next24h);
+      const prices = await fetchStoredPrices(biddingZone, yesterday, dayAfterTomorrow);
       
       if (prices.length === 0) {
         console.warn('No price data available for forecast');
@@ -92,12 +95,30 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
 
       // Calculate rolling average for price classification with adaptive days
       const { average: rollingAvg } = calculateRollingAverage(prices, settings.rollingDays);
+      const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       
-      // Create forecast data points
+      // Create forecast data points including historical data
       const forecast: ForecastPoint[] = prices
-        .filter(price => price.start >= now) // Only future prices
-        .slice(0, 24) // Next 24 hours
+        .filter(point => {
+          // Include data from yesterday evening to tomorrow
+          const yesterdayDate = yesterday.toDateString();
+          const todayDate = now.toDateString();
+          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          const pointDate = point.start.toDateString();
+          
+          return pointDate === yesterdayDate || pointDate === todayDate || pointDate === tomorrowDate;
+        })
         .map(price => {
+          const yesterdayDate = yesterday.toDateString();
+          const todayDate = now.toDateString();
+          const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+          const pointDate = price.start.toDateString();
+          
+          let dayLabel: 'yesterday' | 'today' | 'tomorrow';
+          if (pointDate === yesterdayDate) dayLabel = 'yesterday';
+          else if (pointDate === todayDate) dayLabel = 'today';
+          else dayLabel = 'tomorrow';
+
           const priceState = classifyPrice(
             price.value, 
             rollingAvg, 
@@ -110,18 +131,22 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
             weather.temperature
           );
 
+          const isCurrentHour = price.start.getHours() === currentHour.getHours() && 
+                               price.start.toDateString() === currentHour.toDateString();
+
           return {
-            time: price.start.toLocaleTimeString('sv-SE', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: false 
-            }),
+            time: price.start.getHours().toString().padStart(2, '0'),
             targetTemp,
             priceState,
             actualPrice: price.value,
-            timestamp: price.start
+            timestamp: price.start,
+            day: dayLabel,
+            isCurrentHour
           };
         });
+
+      // Sort by timestamp
+      forecast.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       setForecastData(forecast);
     } catch (error) {
@@ -142,6 +167,24 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
 
   const getLineColor = (dataKey: string) => {
     return 'hsl(var(--accent))';
+  };
+
+  const formatXAxisTick = (tickItem: string, index: number) => {
+    // Show every 4th hour: 04, 08, 12, 16, 20, 00, 04, etc.
+    const hour = parseInt(tickItem);
+    return hour % 4 === 0 ? tickItem : '';
+  };
+
+  // Get day break positions (midnight hours)
+  const getDayBreaks = () => {
+    return forecastData
+      .filter(point => point.time === '00' && point.day !== 'yesterday')
+      .map(point => point.time);
+  };
+
+  // Get current time point
+  const getCurrentTimePoint = () => {
+    return forecastData.find(point => point.isCurrentHour);
   };
 
   const formatTooltipValue = (value: number, name: string) => {
@@ -177,9 +220,9 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       {/* Header with weather info */}
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-medium">Smart Temperature Control</h4>
+          <h4 className="text-sm font-medium">Target Temperature Forecast</h4>
           <p className="text-xs text-muted-foreground">
-            24-hour forecast based on electricity prices and weather
+            {forecastData.length} hours • Based on electricity prices and weather
           </p>
         </div>
         {weatherData && (
@@ -193,29 +236,24 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       </div>
 
       {/* Chart */}
-      <div className="h-64">
+      <div className="h-48 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={forecastData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
               dataKey="time" 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
+              tickFormatter={formatXAxisTick}
+              height={40}
               interval={0}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tickFormatter={(value) => {
-                // Show only full hours (e.g., "14:00", "15:00")
-                return value.endsWith(':00') ? value : '';
-              }}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
               domain={[settings.minTemp, settings.maxTemp]}
               tickFormatter={(value) => `${value}°C`}
-              label={{ value: 'Temperature °C', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+              width={50}
             />
             <Tooltip 
               formatter={formatTooltipValue}
@@ -224,41 +262,63 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
                 backgroundColor: 'hsl(var(--background))',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                fontSize: '12px',
               }}
             />
+            {/* Day break lines */}
+            {getDayBreaks().map((breakTime, index) => (
+              <ReferenceLine 
+                key={`day-break-${index}`}
+                x={breakTime} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeWidth={2}
+                strokeOpacity={0.6}
+              />
+            ))}
+            {/* Current time indicator */}
+            {getCurrentTimePoint() && (
+              <ReferenceLine 
+                x={getCurrentTimePoint()!.time} 
+                stroke="hsl(var(--destructive))" 
+                strokeWidth={2}
+                strokeDasharray="2 2"
+              />
+            )}
             <ReferenceLine 
               y={settings.baseSetpoint} 
               stroke="hsl(var(--muted-foreground))" 
               strokeDasharray="5 5"
-              label={{ value: "Base temp", position: "top", fontSize: 10 }}
+              strokeOpacity={0.7}
+              label={{ value: "Base temp", position: "top", fontSize: 9 }}
             />
             <Line 
               type="stepAfter" 
               dataKey="targetTemp" 
               stroke={getLineColor('targetTemp')}
               strokeWidth={2}
-              dot={{ fill: 'hsl(var(--accent))', strokeWidth: 0, r: 2 }}
-              activeDot={{ r: 4, fill: 'hsl(var(--accent))' }}
+              dot={false}
+              activeDot={{ r: 4, fill: 'hsl(var(--accent))', strokeWidth: 2, stroke: 'hsl(var(--background))' }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {/* Legend and info */}
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-0.5 bg-accent"></div>
-            <span className="text-muted-foreground">Target Temperature</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
-            <span className="text-muted-foreground">Base Setpoint ({settings.baseSetpoint}°C)</span>
-          </div>
+      <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-6 text-xs">
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-0.5 bg-accent"></div>
+          <span className="text-muted-foreground">Target Temperature</span>
         </div>
-        <div className="text-muted-foreground">
-          {forecastData.length} hours forecast
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-0.5 border-t border-dashed border-muted-foreground"></div>
+          <span className="text-muted-foreground">Base Setpoint ({settings.baseSetpoint}°C)</span>
         </div>
+        {getCurrentTimePoint() && (
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-0.5 bg-destructive border-t-2 border-dashed border-destructive"></div>
+            <span className="text-muted-foreground">Current Time</span>
+          </div>
+        )}
       </div>
 
       {/* Price adjustment info */}
