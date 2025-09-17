@@ -134,9 +134,9 @@ export const LivePriceTest = () => {
           <div className="text-center">
             <p className="text-xs text-muted-foreground mb-1">Current Hour</p>
             <p className="text-2xl font-bold text-primary">
-              {data.status === 'success' ? `${data.currentPrice.toFixed(3)}` : '---'}
+              {data.status === 'success' ? `${(data.currentPrice * 100).toFixed(1)}` : '---'}
             </p>
-            <p className="text-xs text-muted-foreground">SEK/kWh</p>
+            <p className="text-xs text-muted-foreground">öre/kWh</p>
           </div>
         </Card>
 
@@ -144,9 +144,9 @@ export const LivePriceTest = () => {
           <div className="text-center">
             <p className="text-xs text-muted-foreground mb-1">Next Hour</p>
             <p className="text-2xl font-bold">
-              {data.status === 'success' ? `${data.nextHourPrice.toFixed(3)}` : '---'}
+              {data.status === 'success' ? `${(data.nextHourPrice * 100).toFixed(1)}` : '---'}
             </p>
-            <p className="text-xs text-muted-foreground">SEK/kWh</p>
+            <p className="text-xs text-muted-foreground">öre/kWh</p>
           </div>
         </Card>
 
@@ -175,10 +175,6 @@ export const LivePriceTest = () => {
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Last Update:</span>
             <span>{data.lastUpdate.toLocaleTimeString('sv-SE')}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">API Endpoint:</span>
-            <span className="text-xs font-mono">elprisetjustnu.se/api/v1</span>
           </div>
           {data.status === 'error' && data.error && (
             <div className="mt-3 p-2 bg-destructive/5 rounded border border-destructive/20">
