@@ -15,6 +15,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { CONFIG } from "@/lib/config";
 import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatusService";
 import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
+import { AutomationService, AutomationSettings } from "@/services/automationService";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardData {
@@ -36,6 +37,42 @@ const Dashboard = () => {
     lastUpdate: new Date(),
   });
   const [loading, setLoading] = useState(false);
+  const [automationSettings, setAutomationSettings] = useState<AutomationSettings | null>(null);
+  
+  // Load automation settings on mount
+  useEffect(() => {
+    const loadAutomationSettings = async () => {
+      const settings = await AutomationService.getSettings();
+      if (settings) {
+        setAutomationSettings(settings);
+        setData(prev => ({ ...prev, automation: settings.automation_enabled }));
+      }
+    };
+    
+    loadAutomationSettings();
+  }, []);
+  
+  // Set up real-time automation settings updates
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    
+    const setupRealTimeUpdates = () => {
+      unsubscribe = AutomationService.subscribeToSettingsChanges((newSettings) => {
+        if (newSettings) {
+          setAutomationSettings(newSettings);
+          setData(prev => ({ ...prev, automation: newSettings.automation_enabled }));
+        }
+      });
+    };
+    
+    setupRealTimeUpdates();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
   
   // Set up real-time heat pump status updates
   useEffect(() => {
@@ -111,8 +148,13 @@ const Dashboard = () => {
   const handleTargetTempChange = async (newTemp: number) => {
     if (newTemp >= settings.minTemp && newTemp <= settings.maxTemp) {
       try {
-        // First update local setting
+        // Update local setting
         updateSetting('baseSetpoint', newTemp);
+        
+        // Update automation settings if automation is enabled
+        if (data.automation && automationSettings) {
+          await AutomationService.updateSettings({ target_pool_temp: newTemp });
+        }
         
         // Optimistically update the UI immediately
         setData(prev => ({
@@ -150,16 +192,7 @@ const Dashboard = () => {
         });
         
         // Revert the optimistic update on error
-        const { data: config } = await supabase
-          .from('tuya_config')
-          .select('device_id, uid')
-          .eq('id', 'default')
-          .single();
-          
-        if (config) {
-          // Trigger a status refresh to get the actual current state
-          HeatPumpStatusService.triggerStatusUpdate();
-        }
+        HeatPumpStatusService.triggerStatusUpdate();
       }
     }
   };
@@ -257,12 +290,40 @@ const Dashboard = () => {
     fetchCurrentPrice();
   }, [settings.biddingZone]);
 
-  const handleAutomationToggle = (enabled: boolean) => {
-    setData(prev => ({ ...prev, automation: enabled }));
-    toast({
-      title: enabled ? "Automation Enabled" : "Automation Disabled",
-      description: enabled ? "Heat pump will adjust based on electricity prices" : "Manual control mode activated",
-    });
+  const handleAutomationToggle = async (enabled: boolean) => {
+    try {
+      const success = await AutomationService.updateSettings({ automation_enabled: enabled });
+      
+      if (success) {
+        setData(prev => ({ ...prev, automation: enabled }));
+        toast({
+          title: enabled ? "Automation Enabled" : "Automation Disabled",
+          description: enabled 
+            ? "Heat pump will automatically adjust based on electricity prices" 
+            : "Manual control mode activated - automation paused",
+        });
+        
+        if (enabled) {
+          // Trigger an immediate automation run when enabling
+          setTimeout(() => {
+            AutomationService.triggerAutomation();
+          }, 1000);
+        }
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to update automation settings",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('Error toggling automation:', error);
+      toast({
+        title: "Automation Error",
+        description: error.message || "Failed to update automation settings",
+        variant: "destructive",
+      });
+    }
   };
 
   const getPriceStateColor = (state: string) => {
@@ -339,8 +400,18 @@ const Dashboard = () => {
             <div>
               <p className="text-sm text-muted-foreground">Target Temperature</p>
               <p className="text-3xl font-bold text-primary">
-                {data.heatPump ? `${data.heatPump.target_temp}°C` : `${settings.baseSetpoint}°C`}
+                {automationSettings && data.automation 
+                  ? `${automationSettings.target_pool_temp}°C` 
+                  : data.heatPump 
+                    ? `${data.heatPump.target_temp}°C` 
+                    : `${settings.baseSetpoint}°C`
+                }
               </p>
+              {data.automation && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pool: {automationSettings?.target_pool_temp}°C
+                </p>
+              )}
             </div>
             <div className="flex items-center justify-center space-x-4">
               <Button
