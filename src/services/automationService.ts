@@ -79,6 +79,119 @@ export class AutomationService {
   }
 
   /**
+   * Check if sufficient price data is available for automation
+   */
+  static async validateDataAvailability(biddingZone: string): Promise<{ isValid: boolean; message?: string }> {
+    try {
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      // Check for recent price data
+      const { data: recentData, error: recentError } = await supabase
+        .from('price_data')
+        .select('id')
+        .eq('bidding_zone', biddingZone)
+        .eq('provider', 'elpriset')
+        .gte('start_time', oneDayAgo.toISOString())
+        .limit(1);
+
+      if (recentError) {
+        console.error('Error checking recent price data:', recentError);
+        return { 
+          isValid: false, 
+          message: 'Unable to verify price data availability. Database connection error.' 
+        };
+      }
+
+      if (!recentData || recentData.length === 0) {
+        return { 
+          isValid: false, 
+          message: `No recent price data available for ${biddingZone}. Automation requires electricity price data to function properly.` 
+        };
+      }
+
+      // Check for current hour data
+      const startOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+      const endOfHour = new Date(startOfHour.getTime() + 60 * 60 * 1000);
+      
+      const { data: currentData, error: currentError } = await supabase
+        .from('price_data')
+        .select('id')
+        .eq('bidding_zone', biddingZone)
+        .eq('provider', 'elpriset')
+        .gte('start_time', startOfHour.toISOString())
+        .lt('start_time', endOfHour.toISOString())
+        .limit(1);
+
+      if (currentError) {
+        console.error('Error checking current price data:', currentError);
+        return { 
+          isValid: false, 
+          message: 'Unable to verify current price data. Database connection error.' 
+        };
+      }
+
+      if (!currentData || currentData.length === 0) {
+        console.warn('No current hour price data available, but recent data exists');
+        // This is a warning but not a blocker since we have recent data
+      }
+
+      return { isValid: true };
+    } catch (error) {
+      console.error('Error validating data availability:', error);
+      return { 
+        isValid: false, 
+        message: 'Failed to validate price data availability. Please check your connection and try again.' 
+      };
+    }
+  }
+
+  /**
+   * Update automation settings with data validation
+   */
+  static async updateSettingsWithValidation(
+    settings: Partial<AutomationSettings>, 
+    biddingZone?: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      // If enabling automation, validate data availability first
+      if (settings.automation_enabled === true && biddingZone) {
+        const validation = await this.validateDataAvailability(biddingZone);
+        if (!validation.isValid) {
+          return { 
+            success: false, 
+            message: validation.message || 'Insufficient data to enable automation' 
+          };
+        }
+      }
+
+      const { error } = await supabase
+        .from('automation_settings')
+        .update({
+          ...settings,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', 'default');
+
+      if (error) {
+        console.error('Failed to update automation settings:', error);
+        return { 
+          success: false, 
+          message: 'Failed to update automation settings. Please try again.' 
+        };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating automation settings:', error);
+      return { 
+        success: false, 
+        message: 'An unexpected error occurred while updating settings.' 
+      };
+    }
+  }
+
+  /**
    * Get automation logs (recent activity)
    */
   static async getLogs(limit: number = 50): Promise<AutomationLog[]> {

@@ -376,11 +376,33 @@ const Dashboard = () => {
       HeatPumpStatusService.triggerStatusUpdate();
     }, 2 * 60 * 1000);
     
+    // Check data availability every hour if automation is enabled
+    const dataCheckInterval = setInterval(async () => {
+      if (data.automation) {
+        const validation = await AutomationService.validateDataAvailability(settings.biddingZone);
+        if (!validation.isValid) {
+          console.warn('Data validation failed, disabling automation:', validation.message);
+          
+          // Automatically disable automation
+          const success = await AutomationService.updateSettings({ automation_enabled: false });
+          if (success) {
+            setData(prev => ({ ...prev, automation: false }));
+            toast({
+              title: "Automation Auto-Disabled",
+              description: validation.message || "Automation disabled due to insufficient data",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+    }, 60 * 60 * 1000); // Check every hour
+    
     return () => {
       clearInterval(priceInterval);
       clearInterval(heatPumpInterval);
+      clearInterval(dataCheckInterval);
     };
-  }, []);
+  }, [data.automation, settings.biddingZone]);
 
   // Set up real-time heat pump status subscription
   useEffect(() => {
@@ -402,35 +424,55 @@ const Dashboard = () => {
 
   const handleAutomationToggle = async (enabled: boolean) => {
     try {
-      const success = await AutomationService.updateSettings({ automation_enabled: enabled });
-      
-      if (success) {
+      // Use the validation method when enabling automation
+      if (enabled) {
+        const result = await AutomationService.updateSettingsWithValidation(
+          { automation_enabled: enabled }, 
+          settings.biddingZone
+        );
+        
+        if (!result.success) {
+          toast({
+            title: "Automation Cannot Be Enabled",
+            description: result.message || "Unable to enable automation due to data issues",
+            variant: "destructive",
+          });
+          return; // Don't update UI state if validation failed
+        }
+        
         setData(prev => ({ ...prev, automation: enabled }));
         toast({
-          title: enabled ? "Automation Enabled" : "Automation Disabled",
-          description: enabled 
-            ? "Heat pump will automatically adjust based on electricity prices" 
-            : "Manual control mode activated - automation paused",
+          title: "Automation Enabled",
+          description: "Heat pump will automatically adjust based on electricity prices",
         });
         
-        if (enabled) {
-          // Trigger an immediate automation run when enabling
-          setTimeout(() => {
-            AutomationService.triggerAutomation();
-          }, 1000);
-        }
+        // Trigger an immediate automation run when enabling
+        setTimeout(() => {
+          AutomationService.triggerAutomation();
+        }, 1000);
       } else {
-        toast({
-          title: "Update Failed",
-          description: "Failed to update automation settings",
-          variant: "destructive",
-        });
+        // For disabling, use regular update method
+        const success = await AutomationService.updateSettings({ automation_enabled: enabled });
+        
+        if (success) {
+          setData(prev => ({ ...prev, automation: enabled }));
+          toast({
+            title: "Automation Disabled",
+            description: "Manual control mode activated - automation paused",
+          });
+        } else {
+          toast({
+            title: "Update Failed",
+            description: "Failed to update automation settings",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error: any) {
       console.error('Error toggling automation:', error);
       toast({
-        title: "Automation Error",
-        description: error.message || "Failed to update automation settings",
+        title: "Automation Toggle Failed",
+        description: error?.message || "An unexpected error occurred. Please check your connection and try again.",
         variant: "destructive",
       });
     }
