@@ -67,6 +67,35 @@ export async function getLatestPriceDate(biddingZone: string, provider = 'elpris
   return data.length > 0 ? new Date(data[0].start_time) : null;
 }
 
+// Save price data to database
+export async function savePriceData(prices: PricePoint[], biddingZone: string, provider = 'elpriset'): Promise<void> {
+  if (prices.length === 0) return;
+
+  const data = prices.map(point => ({
+    bidding_zone: biddingZone,
+    start_time: point.start.toISOString(),
+    end_time: point.end.toISOString(),
+    price_value: point.value,
+    currency: point.currency,
+    provider,
+    resolution: point.resolution
+  }));
+
+  const { error } = await supabase
+    .from('price_data')
+    .upsert(data, {
+      onConflict: 'bidding_zone,start_time,provider',
+      ignoreDuplicates: false
+    });
+
+  if (error) {
+    console.error('Error saving price data:', error);
+    throw new Error(`Failed to save price data: ${error.message}`);
+  }
+
+  console.log(`✅ Saved ${prices.length} price points to database`);
+}
+
 // Trigger daily price collection
 export async function triggerPriceCollection(): Promise<void> {
   const { data, error } = await supabase.functions.invoke('daily-price-collector');

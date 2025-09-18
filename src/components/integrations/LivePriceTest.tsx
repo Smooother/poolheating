@@ -41,6 +41,10 @@ export const LivePriceTest = () => {
 
       const prices = await fetchPrices('elpriset', config, today, tomorrow);
       
+      // Save fetched prices to database
+      const { savePriceData } = await import('@/services/priceDataService');
+      await savePriceData(prices, CONFIG.biddingZone);
+      
       // Find current hour and next hour prices
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       const nextHour = new Date(currentHour.getTime() + 60 * 60 * 1000);

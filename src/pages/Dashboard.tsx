@@ -258,19 +258,20 @@ const Dashboard = () => {
   };
 
 
-  // Fetch current price data - try database first, then live API
+  // Fetch current price data from database (Integration tab keeps it updated)
   const fetchCurrentPrice = async () => {
     try {
       setLoading(true);
       console.log('🔄 Dashboard: Starting price fetch...');
       
       const now = new Date();
+      
+      // First try to get current hour price
       const startOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       const endOfHour = new Date(startOfHour.getTime() + 60 * 60 * 1000);
-
+      
       console.log(`🔍 Dashboard: Looking for current hour data ${startOfHour.toISOString()} - ${endOfHour.toISOString()}`);
-
-      // Try to get current price from stored data
+      
       let prices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
       let currentPrice = prices.length > 0 ? prices[0] : null;
       
@@ -280,85 +281,28 @@ const Dashboard = () => {
         currency: currentPrice.currency
       } : 'none');
       
-      // If no current hour data, try to get the most recent available data
+      // If no current hour data, get the most recent available
       if (!currentPrice) {
-        console.log('⚠️ Dashboard: No current hour data available, checking if stored data is too old...');
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const recentPrices = await fetchStoredPrices(settings.biddingZone, oneDayAgo, now);
         
-        // Get the latest available price from the last 6 hours (more recent search)
-        const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-        const recentPrices = await fetchStoredPrices(settings.biddingZone, sixHoursAgo, now);
-        
-        console.log(`📋 Dashboard: Found ${recentPrices.length} prices in last 6 hours`);
+        console.log(`📋 Dashboard: Found ${recentPrices.length} prices in last 24 hours`);
         
         if (recentPrices.length > 0) {
-          const latestStored = recentPrices[recentPrices.length - 1];
-          const dataAge = now.getTime() - latestStored.start.getTime();
-          const maxAge = 3 * 60 * 60 * 1000; // 3 hours
+          currentPrice = recentPrices[recentPrices.length - 1];
+          const dataAge = now.getTime() - currentPrice.start.getTime();
+          const hoursOld = Math.round(dataAge / (60 * 60 * 1000));
           
-          console.log(`⏰ Dashboard: Latest stored data age: ${Math.round(dataAge / (60 * 60 * 1000))} hours (max: 3 hours)`);
-          console.log(`📅 Dashboard: Latest stored price from: ${latestStored.start.toISOString()}, value: ${latestStored.value} ${latestStored.currency}`);
+          console.log(`⚠️ Dashboard: Using most recent price (${hoursOld}h old):`, {
+            start: currentPrice.start.toISOString(),
+            value: currentPrice.value,
+            currency: currentPrice.currency
+          });
           
-          if (dataAge > maxAge) {
-            console.log('🚨 Dashboard: Stored data is too old, fetching fresh data from API...');
-            
-            // Fetch fresh data from API
-            try {
-              const { fetchPrices } = await import('@/services/priceService');
-              const config = {
-                biddingZone: settings.biddingZone,
-                currency: 'SEK' as const,
-                timezone: 'Europe/Stockholm',
-              };
-              
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const tomorrow = new Date(today);
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              
-              console.log(`🌐 Dashboard: Fetching live prices for ${settings.biddingZone} from API...`);
-              const livePrices = await fetchPrices('elpriset', config, today, tomorrow);
-              console.log(`✅ Dashboard: Got ${livePrices.length} live prices from API`);
-              
-              // Find current hour price
-              const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-              const liveCurrentPrice = livePrices.find(p => p.start.getTime() === currentHour.getTime());
-              
-              if (liveCurrentPrice) {
-                currentPrice = liveCurrentPrice;
-                console.log('🎯 Dashboard: Found fresh current hour price from API:', {
-                  start: liveCurrentPrice.start.toISOString(),
-                  value: liveCurrentPrice.value,
-                  currency: liveCurrentPrice.currency
-                });
-              } else {
-                console.log('❌ Dashboard: No current hour price in fresh API data, using most recent stored');
-                currentPrice = latestStored;
-              }
-            } catch (apiError) {
-              console.error('💥 Dashboard: Failed to fetch fresh price data:', apiError);
-              currentPrice = latestStored; // Fallback to stored data
-            }
-          } else {
-            currentPrice = latestStored;
-            console.log('✅ Dashboard: Using recent stored price (data is fresh enough)');
-          }
-        } else {
-          // Try extending search to 24 hours
-          const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-          const dayPrices = await fetchStoredPrices(settings.biddingZone, oneDayAgo, now);
-          
-          console.log(`📋 Dashboard: Extended search found ${dayPrices.length} prices in last 24 hours`);
-          
-          if (dayPrices.length > 0) {
-            currentPrice = dayPrices[dayPrices.length - 1];
-            console.log('⚠️ Dashboard: Using most recent available price from 24h (OLD DATA):', {
-              start: currentPrice.start.toISOString(),
-              value: currentPrice.value,
-              currency: currentPrice.currency
-            });
-            
+          if (hoursOld > 2) {
             toast({
-              title: "Using Older Price Data",
-              description: `No current price available, showing price from ${currentPrice.start.toLocaleTimeString()}`,
+              title: "Price Data May Be Outdated",
+              description: `Using ${hoursOld}-hour old price data. Check Integration tab to refresh.`,
               variant: "default",
             });
           }
@@ -389,54 +333,20 @@ const Dashboard = () => {
         
         console.log(`✅ Dashboard: Current price updated: ${priceInOre.toFixed(1)} öre/kWh (${currentPrice.value.toFixed(4)} ${currentPrice.currency}/kWh)`);
       } else {
-        // No price data available at all, trigger collection
-        console.log('🚨 Dashboard: No price data available anywhere, triggering collection...');
+        // No price data available
+        console.log('🚨 Dashboard: No price data available. Visit Integration tab to fetch fresh data.');
         
-        try {
-          await triggerPriceCollection();
-          toast({
-            title: "Updating Price Data",
-            description: "Fetching latest electricity prices...",
-          });
-          
-          // Wait a moment and try again
-          setTimeout(async () => {
-            const newPrices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
-            if (newPrices.length > 0) {
-              const refreshedPrice = newPrices[0];
-              const priceInOre = refreshedPrice.currency === 'SEK' ? refreshedPrice.value * 100 : refreshedPrice.value;
-              const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-              const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
-              const { average: rollingAvg } = calculateRollingAverage(historicalPrices, settings.rollingDays);
-              const priceState = classifyPrice(refreshedPrice.value, rollingAvg, settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', settings);
-              
-              setData(prev => ({
-                ...prev,
-                currentPrice: priceInOre,
-                priceState,
-                lastUpdate: new Date(),
-              }));
-              
-              toast({
-                title: "Price Data Updated",
-                description: `Current price: ${priceInOre.toFixed(1)} öre/kWh`,
-              });
-            } else {
-              toast({
-                title: "Price Data Unavailable",
-                description: "Unable to fetch current electricity prices. Please try again later.",
-                variant: "destructive",
-              });
-            }
-          }, 3000); // Wait 3 seconds for collection to complete
-        } catch (error) {
-          console.error('Failed to trigger price collection:', error);
-          toast({
-            title: "Price Update Failed",
-            description: "Could not fetch electricity prices. Check your connection.",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "No Price Data Available",
+          description: "Please visit the Integration tab to fetch current electricity prices.",
+          variant: "default",
+        });
+        
+        setData(prev => ({
+          ...prev,
+          priceState: 'normal',
+          lastUpdate: new Date(),
+        }));
       }
     } catch (error) {
       console.error('💥 Dashboard: Failed to fetch current price:', error);
