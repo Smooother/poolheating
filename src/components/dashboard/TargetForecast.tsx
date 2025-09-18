@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tool
 import { fetchStoredPrices } from '@/services/priceDataService';
 import { classifyPrice, calculateRollingAverage } from '@/services/priceService';
 import { useSettings } from '@/contexts/SettingsContext';
+import { Clock } from 'lucide-react';
 
 interface ForecastPoint {
   time: string;
@@ -299,12 +300,19 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
                 strokeOpacity={0.6}
               />
             ))}
-            {/* Current time indicator on top */}
+            {/* Current time indicator with enhanced visibility */}
             <ReferenceLine 
               x={Date.now()} 
               stroke="hsl(var(--destructive))" 
-              strokeWidth={2}
-              strokeDasharray="2 2"
+              strokeWidth={3}
+              strokeDasharray="4 4"
+              label={{ 
+                value: "NOW", 
+                position: "top", 
+                fontSize: 10, 
+                fill: "hsl(var(--destructive))",
+                fontWeight: "bold"
+              }}
             />
             <ReferenceLine 
               y={settings.baseSetpoint} 

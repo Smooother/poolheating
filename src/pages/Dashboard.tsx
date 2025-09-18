@@ -275,18 +275,36 @@ const Dashboard = () => {
       if (!currentPrice) {
         console.log('No current hour data available, fetching most recent...');
         
-        // Get the latest available price from the last 48 hours
-        const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-        const recentPrices = await fetchStoredPrices(settings.biddingZone, twoDaysAgo, now);
+        // Get the latest available price from the last 6 hours (more recent search)
+        const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+        const recentPrices = await fetchStoredPrices(settings.biddingZone, sixHoursAgo, now);
         
         if (recentPrices.length > 0) {
           // Get the most recent price point
           currentPrice = recentPrices[recentPrices.length - 1];
           console.log('Using most recent available price:', currentPrice);
+        } else {
+          // Try extending search to 24 hours
+          const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          const dayPrices = await fetchStoredPrices(settings.biddingZone, oneDayAgo, now);
+          
+          if (dayPrices.length > 0) {
+            currentPrice = dayPrices[dayPrices.length - 1];
+            console.log('Using most recent available price from 24h:', currentPrice);
+            
+            toast({
+              title: "Using Older Price Data",
+              description: `No current price available, showing price from ${currentPrice.start.toLocaleTimeString()}`,
+              variant: "default",
+            });
+          }
         }
       }
       
       if (currentPrice) {
+        // Convert price to öre (multiply by 100 if in SEK/kWh)
+        const priceInOre = currentPrice.currency === 'SEK' ? currentPrice.value * 100 : currentPrice.value;
+        
         // Get historical prices for classification (last 7 days)
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
@@ -296,10 +314,12 @@ const Dashboard = () => {
         
         setData(prev => ({
           ...prev,
-          currentPrice: currentPrice.value,
+          currentPrice: priceInOre, // Store in öre for display
           priceState,
           lastUpdate: new Date(),
         }));
+        
+        console.log(`Current price: ${priceInOre.toFixed(1)} öre/kWh (${currentPrice.value.toFixed(4)} ${currentPrice.currency}/kWh)`);
       } else {
         // No price data available at all, trigger collection
         console.log('No price data available, triggering collection...');
@@ -316,6 +336,7 @@ const Dashboard = () => {
             const newPrices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
             if (newPrices.length > 0) {
               const refreshedPrice = newPrices[0];
+              const priceInOre = refreshedPrice.currency === 'SEK' ? refreshedPrice.value * 100 : refreshedPrice.value;
               const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
               const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
               const { average: rollingAvg } = calculateRollingAverage(historicalPrices, settings.rollingDays);
@@ -323,14 +344,14 @@ const Dashboard = () => {
               
               setData(prev => ({
                 ...prev,
-                currentPrice: refreshedPrice.value,
+                currentPrice: priceInOre,
                 priceState,
                 lastUpdate: new Date(),
               }));
               
               toast({
                 title: "Price Data Updated",
-                description: `Current price: ${refreshedPrice.value.toFixed(2)} ${refreshedPrice.currency}/kWh`,
+                description: `Current price: ${priceInOre.toFixed(1)} öre/kWh`,
               });
             } else {
               toast({
@@ -387,11 +408,25 @@ const Dashboard = () => {
           const success = await AutomationService.updateSettings({ automation_enabled: false });
           if (success) {
             setData(prev => ({ ...prev, automation: false }));
-            toast({
-              title: "Automation Auto-Disabled",
-              description: validation.message || "Automation disabled due to insufficient data",
-              variant: "destructive",
-            });
+            
+            // Send base temperature to pump when auto-disabling automation
+            try {
+              const baseTemp = automationSettings?.target_pool_temp || settings.baseSetpoint;
+              await HeatPumpCommandService.setTargetTemperature(baseTemp);
+              
+              toast({
+                title: "Automation Auto-Disabled",
+                description: `${validation.message || "Automation disabled due to insufficient data"}. Target temperature reset to ${baseTemp}°C`,
+                variant: "destructive",
+              });
+            } catch (tempError) {
+              console.error('Failed to set base temperature on auto-disable:', tempError);
+              toast({
+                title: "Automation Auto-Disabled",
+                description: validation.message || "Automation disabled due to insufficient data",
+                variant: "destructive",
+              });
+            }
           }
         }
       }
@@ -456,10 +491,24 @@ const Dashboard = () => {
         
         if (success) {
           setData(prev => ({ ...prev, automation: enabled }));
-          toast({
-            title: "Automation Disabled",
-            description: "Manual control mode activated - automation paused",
-          });
+          
+          // Send base/normal temperature to pump when disabling automation
+          try {
+            const baseTemp = automationSettings?.target_pool_temp || settings.baseSetpoint;
+            await HeatPumpCommandService.setTargetTemperature(baseTemp);
+            
+            toast({
+              title: "Automation Disabled",
+              description: `Manual control mode activated. Target temperature set to ${baseTemp}°C`,
+            });
+          } catch (tempError) {
+            console.error('Failed to set base temperature:', tempError);
+            toast({
+              title: "Automation Disabled",
+              description: "Manual control mode activated, but failed to set base temperature",
+              variant: "destructive",
+            });
+          }
         } else {
           toast({
             title: "Update Failed",
@@ -647,7 +696,7 @@ const Dashboard = () => {
             <div>
               <p className="text-sm text-muted-foreground">Current Price</p>
               <p className="text-3xl font-bold text-warning">
-                {loading ? '...' : (data.currentPrice * 100).toFixed(1)}
+                {loading ? '...' : data.currentPrice.toFixed(1)}
                 <span className="text-sm font-normal ml-1">öre/kWh</span>
               </p>
             </div>

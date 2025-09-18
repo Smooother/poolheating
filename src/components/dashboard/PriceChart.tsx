@@ -5,6 +5,7 @@ import { calculateRollingAverage } from '@/services/priceService';
 import { CONFIG } from '@/lib/config';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/contexts/SettingsContext';
+import { Clock } from 'lucide-react';
 
 interface ChartDataPoint {
   time: string;
@@ -264,12 +265,19 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
                 strokeOpacity={0.6}
               />
             ))}
-            {/* Current time indicator (on top) */}
+            {/* Current time indicator with enhanced visibility */}
             <ReferenceLine 
               x={Date.now()} 
               stroke="hsl(var(--destructive))" 
-              strokeWidth={2}
-              strokeDasharray="2 2"
+              strokeWidth={3}
+              strokeDasharray="4 4"
+              label={{ 
+                value: "NOW", 
+                position: "top", 
+                fontSize: 10, 
+                fill: "hsl(var(--destructive))",
+                fontWeight: "bold"
+              }}
             />
             {averagePrice > 0 && (
               <ReferenceLine 
