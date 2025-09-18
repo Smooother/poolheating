@@ -169,14 +169,60 @@ const Dashboard = () => {
         await HeatPumpCommandService.setTargetTemperature(newTemp);
         
         toast({
-          title: "Temperature Updated",
-          description: `Target temperature set to ${newTemp}°C and sent to heat pump`,
+          title: "Temperature Command Sent",
+          description: `Sending ${newTemp}°C to heat pump - verifying...`,
         });
         
-        // Trigger status refresh after a short delay to get updated pump speed
-        setTimeout(() => {
-          HeatPumpStatusService.triggerStatusUpdate();
-        }, 2000);
+        // Wait for pump to process the command, then verify the target temperature
+        setTimeout(async () => {
+          try {
+            // Trigger status update first
+            await HeatPumpStatusService.triggerStatusUpdate();
+            
+            // Wait a bit more for the status to be updated
+            setTimeout(async () => {
+              const currentStatus = await HeatPumpStatusService.getLatestStatus();
+              
+              if (currentStatus) {
+                // Update UI with actual value from pump
+                setData(prev => ({
+                  ...prev,
+                  heatPump: prev.heatPump ? {
+                    ...prev.heatPump,
+                    target_temp: currentStatus.target_temp
+                  } : null
+                }));
+                
+                // Check if the value matches what we sent
+                if (Math.abs(currentStatus.target_temp - newTemp) < 0.5) {
+                  toast({
+                    title: "Temperature Verified",
+                    description: `Heat pump confirmed target temperature: ${currentStatus.target_temp}°C`,
+                  });
+                } else {
+                  toast({
+                    title: "Temperature Mismatch",
+                    description: `Requested: ${newTemp}°C, Pump shows: ${currentStatus.target_temp}°C`,
+                    variant: "destructive",
+                  });
+                }
+              } else {
+                toast({
+                  title: "Verification Failed",
+                  description: "Could not verify target temperature with heat pump",
+                  variant: "destructive",
+                });
+              }
+            }, 1500); // Additional delay for status to be recorded
+          } catch (error) {
+            console.error('Error verifying target temperature:', error);
+            toast({
+              title: "Verification Error",
+              description: "Failed to verify temperature change with heat pump",
+              variant: "destructive",
+            });
+          }
+        }, 3000); // Initial delay for pump to process command
         
         // And another refresh after 10 seconds to ensure we get the pump response
         setTimeout(() => {
