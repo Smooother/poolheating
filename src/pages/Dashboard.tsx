@@ -262,34 +262,48 @@ const Dashboard = () => {
   const fetchCurrentPrice = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Dashboard: Starting price fetch...');
       
       const now = new Date();
       const startOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       const endOfHour = new Date(startOfHour.getTime() + 60 * 60 * 1000);
 
+      console.log(`🔍 Dashboard: Looking for current hour data ${startOfHour.toISOString()} - ${endOfHour.toISOString()}`);
+
       // Try to get current price from stored data
       let prices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
       let currentPrice = prices.length > 0 ? prices[0] : null;
       
+      console.log(`📊 Dashboard: Found ${prices.length} current hour prices:`, currentPrice ? {
+        start: currentPrice.start.toISOString(),
+        value: currentPrice.value,
+        currency: currentPrice.currency
+      } : 'none');
+      
       // If no current hour data, try to get the most recent available data
       if (!currentPrice) {
-        console.log('No current hour data available, checking if stored data is too old...');
+        console.log('⚠️ Dashboard: No current hour data available, checking if stored data is too old...');
         
         // Get the latest available price from the last 6 hours (more recent search)
         const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
         const recentPrices = await fetchStoredPrices(settings.biddingZone, sixHoursAgo, now);
+        
+        console.log(`📋 Dashboard: Found ${recentPrices.length} prices in last 6 hours`);
         
         if (recentPrices.length > 0) {
           const latestStored = recentPrices[recentPrices.length - 1];
           const dataAge = now.getTime() - latestStored.start.getTime();
           const maxAge = 3 * 60 * 60 * 1000; // 3 hours
           
+          console.log(`⏰ Dashboard: Latest stored data age: ${Math.round(dataAge / (60 * 60 * 1000))} hours (max: 3 hours)`);
+          console.log(`📅 Dashboard: Latest stored price from: ${latestStored.start.toISOString()}, value: ${latestStored.value} ${latestStored.currency}`);
+          
           if (dataAge > maxAge) {
-            console.log('Stored data is too old, fetching fresh data from API...');
+            console.log('🚨 Dashboard: Stored data is too old, fetching fresh data from API...');
             
             // Fetch fresh data from API
             try {
-              const { fetchPrices, PriceProviderFactory } = await import('@/services/priceService');
+              const { fetchPrices } = await import('@/services/priceService');
               const config = {
                 biddingZone: settings.biddingZone,
                 currency: 'SEK' as const,
@@ -300,34 +314,47 @@ const Dashboard = () => {
               const tomorrow = new Date(today);
               tomorrow.setDate(tomorrow.getDate() + 1);
               
+              console.log(`🌐 Dashboard: Fetching live prices for ${settings.biddingZone} from API...`);
               const livePrices = await fetchPrices('elpriset', config, today, tomorrow);
+              console.log(`✅ Dashboard: Got ${livePrices.length} live prices from API`);
               
               // Find current hour price
               const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-              currentPrice = livePrices.find(p => p.start.getTime() === currentHour.getTime()) || null;
+              const liveCurrentPrice = livePrices.find(p => p.start.getTime() === currentHour.getTime());
               
-              if (currentPrice) {
-                console.log('Found fresh current price from API:', currentPrice);
+              if (liveCurrentPrice) {
+                currentPrice = liveCurrentPrice;
+                console.log('🎯 Dashboard: Found fresh current hour price from API:', {
+                  start: liveCurrentPrice.start.toISOString(),
+                  value: liveCurrentPrice.value,
+                  currency: liveCurrentPrice.currency
+                });
               } else {
-                console.log('No current hour price in fresh API data, using most recent stored');
+                console.log('❌ Dashboard: No current hour price in fresh API data, using most recent stored');
                 currentPrice = latestStored;
               }
             } catch (apiError) {
-              console.error('Failed to fetch fresh price data:', apiError);
+              console.error('💥 Dashboard: Failed to fetch fresh price data:', apiError);
               currentPrice = latestStored; // Fallback to stored data
             }
           } else {
             currentPrice = latestStored;
-            console.log('Using recent stored price:', currentPrice);
+            console.log('✅ Dashboard: Using recent stored price (data is fresh enough)');
           }
         } else {
           // Try extending search to 24 hours
           const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           const dayPrices = await fetchStoredPrices(settings.biddingZone, oneDayAgo, now);
           
+          console.log(`📋 Dashboard: Extended search found ${dayPrices.length} prices in last 24 hours`);
+          
           if (dayPrices.length > 0) {
             currentPrice = dayPrices[dayPrices.length - 1];
-            console.log('Using most recent available price from 24h:', currentPrice);
+            console.log('⚠️ Dashboard: Using most recent available price from 24h (OLD DATA):', {
+              start: currentPrice.start.toISOString(),
+              value: currentPrice.value,
+              currency: currentPrice.currency
+            });
             
             toast({
               title: "Using Older Price Data",
@@ -342,12 +369,16 @@ const Dashboard = () => {
         // Convert price to öre (multiply by 100 if in SEK/kWh)
         const priceInOre = currentPrice.currency === 'SEK' ? currentPrice.value * 100 : currentPrice.value;
         
+        console.log(`💰 Dashboard: Final price calculation: ${currentPrice.value} ${currentPrice.currency} = ${priceInOre.toFixed(1)} öre/kWh`);
+        
         // Get historical prices for classification (last 7 days)
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
         
         const { average: rollingAvg } = calculateRollingAverage(historicalPrices, settings.rollingDays);
         const priceState = classifyPrice(currentPrice.value, rollingAvg, settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', settings);
+        
+        console.log(`📊 Dashboard: Updating UI with price: ${priceInOre.toFixed(1)} öre/kWh, state: ${priceState}`);
         
         setData(prev => ({
           ...prev,
@@ -356,10 +387,10 @@ const Dashboard = () => {
           lastUpdate: new Date(),
         }));
         
-        console.log(`Current price: ${priceInOre.toFixed(1)} öre/kWh (${currentPrice.value.toFixed(4)} ${currentPrice.currency}/kWh)`);
+        console.log(`✅ Dashboard: Current price updated: ${priceInOre.toFixed(1)} öre/kWh (${currentPrice.value.toFixed(4)} ${currentPrice.currency}/kWh)`);
       } else {
         // No price data available at all, trigger collection
-        console.log('No price data available, triggering collection...');
+        console.log('🚨 Dashboard: No price data available anywhere, triggering collection...');
         
         try {
           await triggerPriceCollection();
@@ -408,7 +439,7 @@ const Dashboard = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch current price:', error);
+      console.error('💥 Dashboard: Failed to fetch current price:', error);
       toast({
         title: "Price Fetch Error",
         description: "Error loading electricity prices",
@@ -416,6 +447,7 @@ const Dashboard = () => {
       });
     } finally {
       setLoading(false);
+      console.log('🏁 Dashboard: Price fetch completed');
     }
   };
 
