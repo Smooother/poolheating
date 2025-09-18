@@ -258,7 +258,7 @@ const Dashboard = () => {
   };
 
 
-  // Fetch current price data from Supabase
+  // Fetch current price data - try database first, then live API
   const fetchCurrentPrice = async () => {
     try {
       setLoading(true);
@@ -273,16 +273,53 @@ const Dashboard = () => {
       
       // If no current hour data, try to get the most recent available data
       if (!currentPrice) {
-        console.log('No current hour data available, fetching most recent...');
+        console.log('No current hour data available, checking if stored data is too old...');
         
         // Get the latest available price from the last 6 hours (more recent search)
         const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
         const recentPrices = await fetchStoredPrices(settings.biddingZone, sixHoursAgo, now);
         
         if (recentPrices.length > 0) {
-          // Get the most recent price point
-          currentPrice = recentPrices[recentPrices.length - 1];
-          console.log('Using most recent available price:', currentPrice);
+          const latestStored = recentPrices[recentPrices.length - 1];
+          const dataAge = now.getTime() - latestStored.start.getTime();
+          const maxAge = 3 * 60 * 60 * 1000; // 3 hours
+          
+          if (dataAge > maxAge) {
+            console.log('Stored data is too old, fetching fresh data from API...');
+            
+            // Fetch fresh data from API
+            try {
+              const { fetchPrices, PriceProviderFactory } = await import('@/services/priceService');
+              const config = {
+                biddingZone: settings.biddingZone,
+                currency: 'SEK' as const,
+                timezone: 'Europe/Stockholm',
+              };
+              
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const tomorrow = new Date(today);
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              
+              const livePrices = await fetchPrices('elpriset', config, today, tomorrow);
+              
+              // Find current hour price
+              const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+              currentPrice = livePrices.find(p => p.start.getTime() === currentHour.getTime()) || null;
+              
+              if (currentPrice) {
+                console.log('Found fresh current price from API:', currentPrice);
+              } else {
+                console.log('No current hour price in fresh API data, using most recent stored');
+                currentPrice = latestStored;
+              }
+            } catch (apiError) {
+              console.error('Failed to fetch fresh price data:', apiError);
+              currentPrice = latestStored; // Fallback to stored data
+            }
+          } else {
+            currentPrice = latestStored;
+            console.log('Using recent stored price:', currentPrice);
+          }
         } else {
           // Try extending search to 24 hours
           const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
