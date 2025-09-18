@@ -269,10 +269,24 @@ const Dashboard = () => {
 
       // Try to get current price from stored data
       let prices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
+      let currentPrice = prices.length > 0 ? prices[0] : null;
       
-      if (prices.length > 0) {
-        const currentPrice = prices[0];
+      // If no current hour data, try to get the most recent available data
+      if (!currentPrice) {
+        console.log('No current hour data available, fetching most recent...');
         
+        // Get the latest available price from the last 48 hours
+        const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+        const recentPrices = await fetchStoredPrices(settings.biddingZone, twoDaysAgo, now);
+        
+        if (recentPrices.length > 0) {
+          // Get the most recent price point
+          currentPrice = recentPrices[recentPrices.length - 1];
+          console.log('Using most recent available price:', currentPrice);
+        }
+      }
+      
+      if (currentPrice) {
         // Get historical prices for classification (last 7 days)
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
@@ -287,11 +301,61 @@ const Dashboard = () => {
           lastUpdate: new Date(),
         }));
       } else {
-        // No current data available, try to trigger collection
-        console.log('No current price data available, triggering collection...');
+        // No price data available at all, trigger collection
+        console.log('No price data available, triggering collection...');
+        
+        try {
+          await triggerPriceCollection();
+          toast({
+            title: "Updating Price Data",
+            description: "Fetching latest electricity prices...",
+          });
+          
+          // Wait a moment and try again
+          setTimeout(async () => {
+            const newPrices = await fetchStoredPrices(settings.biddingZone, startOfHour, endOfHour);
+            if (newPrices.length > 0) {
+              const refreshedPrice = newPrices[0];
+              const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              const historicalPrices = await fetchStoredPrices(settings.biddingZone, sevenDaysAgo, now);
+              const { average: rollingAvg } = calculateRollingAverage(historicalPrices, settings.rollingDays);
+              const priceState = classifyPrice(refreshedPrice.value, rollingAvg, settings.thresholdMethod === 'delta' ? 'percent' : 'percentile', settings);
+              
+              setData(prev => ({
+                ...prev,
+                currentPrice: refreshedPrice.value,
+                priceState,
+                lastUpdate: new Date(),
+              }));
+              
+              toast({
+                title: "Price Data Updated",
+                description: `Current price: ${refreshedPrice.value.toFixed(2)} ${refreshedPrice.currency}/kWh`,
+              });
+            } else {
+              toast({
+                title: "Price Data Unavailable",
+                description: "Unable to fetch current electricity prices. Please try again later.",
+                variant: "destructive",
+              });
+            }
+          }, 3000); // Wait 3 seconds for collection to complete
+        } catch (error) {
+          console.error('Failed to trigger price collection:', error);
+          toast({
+            title: "Price Update Failed",
+            description: "Could not fetch electricity prices. Check your connection.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to fetch current price:', error);
+      toast({
+        title: "Price Fetch Error",
+        description: "Error loading electricity prices",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
