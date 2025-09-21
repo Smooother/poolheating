@@ -98,24 +98,23 @@ async function runAutomation() {
     .lte('start_time', forecastEnd.toISOString())
     .order('start_time', { ascending: true });
 
-  const avgForecastPrice = forecastPrices.length > 0 
-    ? forecastPrices.reduce((sum, p) => sum + parseFloat(p.price_value), 0) / forecastPrices.length
-    : parseFloat(currentPrice.price_value);
-
+  // Calculate price average for classification
+  const averagePrice = await calculatePriceAverage(settings.average_days || 7);
+  
   // Calculate optimal temperature
   const result = calculateOptimalPumpTemp(
     parseFloat(currentPrice.price_value),
-    avgForecastPrice,
+    averagePrice,
     heatPumpStatus?.current_temp || settings.target_pool_temp,
     settings.target_pool_temp,
     heatPumpStatus?.target_temp || settings.target_pool_temp,
     settings
   );
 
-  const priceClassification = classifyPrice(parseFloat(currentPrice.price_value), settings);
-  let actionTaken = '';
-
   // Execute the automation action
+  let actionTaken = '';
+  const priceClassification = classifyPrice(parseFloat(currentPrice.price_value), averagePrice, settings.high_price_threshold || 1.50);
+
   if (result.shouldShutdown) {
     // Turn off pump completely
     try {
@@ -174,7 +173,7 @@ async function runAutomation() {
   await supabase.from('automation_log').insert({
     user_id: 'default',
     current_price: parseFloat(currentPrice.price_value),
-    avg_price_forecast: avgForecastPrice,
+    avg_price_forecast: averagePrice,
     current_pool_temp: heatPumpStatus?.water_temp || null,
     target_pool_temp: settings.target_pool_temp,
     current_pump_temp: heatPumpStatus?.target_temp || null,
@@ -186,6 +185,7 @@ async function runAutomation() {
   return {
     success: true,
     currentPrice: parseFloat(currentPrice.price_value),
+    averagePrice: averagePrice,
     newTemp: result.shouldShutdown ? null : result.newTemp,
     shouldShutdown: result.shouldShutdown,
     reason: result.reason,
@@ -194,32 +194,32 @@ async function runAutomation() {
   };
 }
 
-function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, targetPoolTemp, currentPumpTemp, settings) {
+function calculateOptimalPumpTemp(currentPrice, averagePrice, currentPoolTemp, targetPoolTemp, currentPumpTemp, settings) {
   // Use current pump temperature as baseline (this is the actual SetTemp from the pump)
   const baselineTemp = currentPumpTemp || targetPoolTemp;
   let newTemp = baselineTemp;
-  let reason = '';
   let shouldShutdown = false;
+  let reason = '';
 
-  // Classify current price using user settings
-  const priceClassification = classifyPrice(currentPrice, settings);
+  // Classify current price
+  const priceClassification = classifyPrice(currentPrice, averagePrice, settings.high_price_threshold || 1.50);
   
   if (priceClassification === 'shutdown') {
     // SHUTDOWN price - turn off pump completely
     shouldShutdown = true;
-    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings?.high_price_threshold ?? 1.50} SEK/kWh)`;
+    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings.high_price_threshold || 1.50} SEK/kWh)`;
   } else if (priceClassification === 'low') {
     // LOW price - add +2°C for aggressive heating
-    newTemp = Math.min(settings?.max_pump_temp ?? 35, baselineTemp + 2);
-    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (threshold: ${settings?.low_price_threshold ?? 0.05} SEK/kWh)`;
+    newTemp = Math.min(settings.max_pump_temp, baselineTemp + 2);
+    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (avg: ${averagePrice.toFixed(3)})`;
   } else if (priceClassification === 'high') {
     // HIGH price - reduce heating by -2°C
-    newTemp = Math.max(settings?.min_pump_temp ?? 18, baselineTemp - 2);
-    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (threshold: ${settings?.normal_price_threshold ?? 0.15} SEK/kWh)`;
+    newTemp = Math.max(settings.min_pump_temp, baselineTemp - 2);
+    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (avg: ${averagePrice.toFixed(3)})`;
   } else {
     // NORMAL price - use baseline temperature
     newTemp = baselineTemp;
-    reason = `NORMAL price (${currentPrice.toFixed(3)} SEK/kWh) - baseline temperature`;
+    reason = `NORMAL price (${currentPrice.toFixed(3)} SEK/kWh) - baseline temperature (avg: ${averagePrice.toFixed(3)})`;
   }
 
   return {
@@ -229,14 +229,37 @@ function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, ta
   };
 }
 
-function classifyPrice(currentPrice, settings) {
-  // Use user-configurable thresholds from settings, with fallback defaults
-  const LOW_THRESHOLD = settings?.low_price_threshold ?? 0.05;
-  const NORMAL_THRESHOLD = settings?.normal_price_threshold ?? 0.15;
-  const HIGH_THRESHOLD = settings?.high_price_threshold ?? 1.50;
+async function calculatePriceAverage(days = 7) {
+  // Calculate average price over the specified number of days
+  const endDate = new Date();
+  const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
+  
+  const { data: priceData } = await supabase
+    .from('price_data')
+    .select('price_value')
+    .eq('bidding_zone', 'SE3')
+    .gte('start_time', startDate.toISOString())
+    .lte('start_time', endDate.toISOString());
+  
+  if (!priceData || priceData.length === 0) {
+    return 0.10; // Default fallback average
+  }
+  
+  const total = priceData.reduce((sum, p) => sum + parseFloat(p.price_value), 0);
+  return total / priceData.length;
+}
+
+function classifyPrice(currentPrice, averagePrice, highPriceThreshold = 1.50) {
+  // Absolute high price threshold - pump shutdown
+  if (currentPrice >= highPriceThreshold) {
+    return 'shutdown';
+  }
+  
+  // Relative thresholds based on average
+  const LOW_THRESHOLD = averagePrice * 0.7;   // 30% below average = LOW
+  const HIGH_THRESHOLD = averagePrice * 1.3;  // 30% above average = HIGH
   
   if (currentPrice <= LOW_THRESHOLD) return 'low';
-  if (currentPrice >= HIGH_THRESHOLD) return 'shutdown'; // Special case for pump shutdown
-  if (currentPrice >= NORMAL_THRESHOLD) return 'high';
+  if (currentPrice >= HIGH_THRESHOLD) return 'high';
   return 'normal';
 }
