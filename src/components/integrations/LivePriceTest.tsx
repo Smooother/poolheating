@@ -102,12 +102,14 @@ export const LivePriceTest = () => {
     }
   };
 
-  // Auto-refresh every 5 minutes
+  // Auto-refresh every 5 minutes and when bidding zone changes
   useEffect(() => {
+    // Set loading state when bidding zone changes
+    setData(prev => ({ ...prev, status: 'loading' }));
     fetchLiveData();
     const interval = setInterval(fetchLiveData, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [settings.biddingZone]); // Re-fetch when bidding zone changes
 
   const getStatusBadge = () => {
     switch (data.status) {
@@ -172,7 +174,7 @@ export const LivePriceTest = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="text-center">
-            <p className="text-xs text-muted-foreground mb-1">Current Hour</p>
+            <p className="text-xs text-muted-foreground mb-1">Current Hour ({settings.biddingZone})</p>
             <p className="text-2xl font-bold text-primary">
               {data.status === 'success' ? `${(data.currentPrice * 100).toFixed(1)}` : '---'}
             </p>
@@ -182,7 +184,7 @@ export const LivePriceTest = () => {
 
         <Card className="p-4">
           <div className="text-center">
-            <p className="text-xs text-muted-foreground mb-1">Next Hour</p>
+            <p className="text-xs text-muted-foreground mb-1">Next Hour ({settings.biddingZone})</p>
             <p className="text-2xl font-bold">
               {data.status === 'success' ? `${(data.nextHourPrice * 100).toFixed(1)}` : '---'}
             </p>
