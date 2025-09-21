@@ -32,7 +32,6 @@ export default async function handler(req, res) {
       .single();
 
     // Get current price data - find the most recent price for current time
-    const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 3600000);
     
     const { data: currentPrice } = await supabase
