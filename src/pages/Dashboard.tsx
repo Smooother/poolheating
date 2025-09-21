@@ -169,6 +169,32 @@ const Dashboard = () => {
           setTimeout(() => {
             AutomationService.triggerAutomation();
           }, 1000);
+          
+          // Wait for automation to process and then update pump setting display
+          setTimeout(async () => {
+            try {
+              // Trigger status update to get the new pump setting
+              await HeatPumpStatusService.triggerStatusUpdate();
+              
+              // Wait a bit more for the status to be updated
+              setTimeout(async () => {
+                const currentStatus = await HeatPumpStatusService.getLatestStatus();
+                
+                if (currentStatus) {
+                  // Update UI with actual pump setting from automation
+                  setData(prev => ({
+                    ...prev,
+                    heatPump: prev.heatPump ? {
+                      ...prev.heatPump,
+                      target_temp: currentStatus.target_temp
+                    } : null
+                  }));
+                }
+              }, 1500); // Additional delay for status to be recorded
+            } catch (error) {
+              console.error('Error updating pump setting display:', error);
+            }
+          }, 3000); // Wait 3 seconds for automation to process
         }
         
       } catch (error: any) {
