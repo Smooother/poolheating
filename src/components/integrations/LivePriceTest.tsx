@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
-// Removed unused imports - now using backend API directly
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface LivePriceData {
   currentPrice: number;
@@ -15,6 +15,7 @@ interface LivePriceData {
 }
 
 export const LivePriceTest = () => {
+  const { settings } = useSettings();
   const [data, setData] = useState<LivePriceData>({
     currentPrice: 0,
     nextHourPrice: 0,
@@ -27,8 +28,8 @@ export const LivePriceTest = () => {
     try {
       setData(prev => ({ ...prev, status: 'loading' }));
 
-      // Fetch price data from our backend API
-      const response = await fetch('/api/prices');
+      // Fetch price data from our backend API with bidding zone
+      const response = await fetch(`/api/prices?zone=${settings.biddingZone}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -72,12 +73,13 @@ export const LivePriceTest = () => {
     try {
       setData(prev => ({ ...prev, status: 'loading' }));
       
-      // Trigger price collection
+      // Trigger price collection with bidding zone
       const response = await fetch('/api/prices', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ zone: settings.biddingZone }),
       });
       
       if (!response.ok) {
@@ -140,7 +142,7 @@ export const LivePriceTest = () => {
         <div>
           <h4 className="text-sm font-medium">Live Price Integration Test</h4>
           <p className="text-xs text-muted-foreground">
-            Elpriset Just Nu • SE3 • Stockholm
+            Elpriset Just Nu • {settings.biddingZone} • Stockholm
           </p>
         </div>
         <div className="flex items-center space-x-2">

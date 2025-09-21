@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { LivePriceTest } from "@/components/integrations/LivePriceTest";
 import { TuyaTest } from "@/components/integrations/TuyaTest";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface IntegrationStatus {
   connected: boolean;
@@ -38,12 +39,13 @@ interface IntegrationStatus {
 
 const Integrations = () => {
   const { toast } = useToast();
+  const { settings, updateSetting, syncWithBackend, isSyncing } = useSettings();
   
   // Nord Pool Settings
   const [nordPoolConfig, setNordPoolConfig] = useState({
     apiUrl: "https://api.nordpoolgroup.com/api",
     apiKey: "",
-    area: "SE3",
+    area: settings.biddingZone,
     currency: "SEK",
     timezone: "Europe/Stockholm",
     enabled: true,
@@ -191,11 +193,30 @@ const Integrations = () => {
                   <div className="space-y-2">
                     <Label>Bidding Zone</Label>
                     <Select
-                      value={nordPoolConfig.area}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        area: value 
-                      }))}
+                      value={settings.biddingZone}
+                      disabled={isSyncing}
+                      onValueChange={async (value) => {
+                        updateSetting('biddingZone', value);
+                        setNordPoolConfig(prev => ({ 
+                          ...prev, 
+                          area: value 
+                        }));
+                        
+                        // Sync with backend
+                        try {
+                          await syncWithBackend();
+                          toast({
+                            title: "Bidding Zone Updated",
+                            description: `Changed to ${value}. Automation will now use prices for this zone.`,
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Sync Failed",
+                            description: "Failed to sync bidding zone with backend. Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />

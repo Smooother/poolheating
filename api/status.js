@@ -20,8 +20,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const now = new Date();
-    const area = (process.env.PRICE_AREA || 'SE3').trim();
+        const now = new Date();
+        
+        // Get bidding zone from automation settings
+        const { data: automationSettings } = await supabase
+          .from('automation_settings')
+          .select('bidding_zone')
+          .eq('user_id', 'default')
+          .single();
+        
+        const area = automationSettings?.bidding_zone || (process.env.PRICE_AREA || 'SE3').trim();
 
     // Get current heat pump status - fetch real-time from Tuya API
     let heatPumpStatus;

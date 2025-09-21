@@ -70,12 +70,12 @@ async function runAutomation() {
     .limit(1)
     .single();
 
-  // Get current price data
+  // Get current price data using the configured bidding zone
   const now = new Date();
   const { data: currentPrice } = await supabase
     .from('price_data')
     .select('*')
-    .eq('bidding_zone', 'SE3')
+    .eq('bidding_zone', settings.bidding_zone || 'SE3')
     .gte('start_time', new Date(now.getTime() - 3600000).toISOString())
     .lte('start_time', now.toISOString())
     .order('start_time', { ascending: false })
@@ -93,13 +93,13 @@ async function runAutomation() {
   const { data: forecastPrices } = await supabase
     .from('price_data')
     .select('*')
-    .eq('bidding_zone', 'SE3')
+    .eq('bidding_zone', settings.bidding_zone || 'SE3')
     .gte('start_time', forecastStart.toISOString())
     .lte('start_time', forecastEnd.toISOString())
     .order('start_time', { ascending: true });
 
   // Calculate price average for classification
-  const averagePrice = await calculatePriceAverage(settings.average_days || 7);
+  const averagePrice = await calculatePriceAverage(settings.average_days || 7, settings.bidding_zone || 'SE3');
   
   // Calculate optimal temperature
   const result = calculateOptimalPumpTemp(
@@ -229,7 +229,7 @@ function calculateOptimalPumpTemp(currentPrice, averagePrice, currentPoolTemp, t
   };
 }
 
-async function calculatePriceAverage(days = 7) {
+async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
   // Calculate average price over the specified number of days
   const endDate = new Date();
   const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
@@ -237,7 +237,7 @@ async function calculatePriceAverage(days = 7) {
   const { data: priceData } = await supabase
     .from('price_data')
     .select('price_value')
-    .eq('bidding_zone', 'SE3')
+    .eq('bidding_zone', biddingZone)
     .gte('start_time', startDate.toISOString())
     .lte('start_time', endDate.toISOString());
   

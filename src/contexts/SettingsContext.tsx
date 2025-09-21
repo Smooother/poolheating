@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { settingsService, AutomationSettings } from '@/services/settingsService';
 
 export interface ControlSettings {
   baseSetpoint: number;
@@ -39,6 +40,8 @@ interface SettingsContextType {
   updateSetting: <K extends keyof ControlSettings>(key: K, value: ControlSettings[K]) => void;
   resetToDefaults: () => void;
   saveSettings: () => void;
+  syncWithBackend: () => Promise<void>;
+  isSyncing: boolean;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -61,6 +64,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return defaultSettings;
     }
   });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const updateSetting = <K extends keyof ControlSettings>(key: K, value: ControlSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -78,6 +82,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const syncWithBackend = async () => {
+    setIsSyncing(true);
+    try {
+      // Sync bidding zone to backend
+      await settingsService.updateBiddingZone(settings.biddingZone);
+      console.log('Settings synced with backend');
+    } catch (error) {
+      console.error('Failed to sync settings with backend:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Auto-save settings when they change
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -88,7 +105,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [settings]);
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSetting, resetToDefaults, saveSettings }}>
+    <SettingsContext.Provider value={{ settings, updateSetting, resetToDefaults, saveSettings, syncWithBackend, isSyncing }}>
       {children}
     </SettingsContext.Provider>
   );
