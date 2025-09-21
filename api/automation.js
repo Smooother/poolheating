@@ -207,15 +207,15 @@ function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, ta
   if (priceClassification === 'shutdown') {
     // SHUTDOWN price - turn off pump completely
     shouldShutdown = true;
-    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings.high_price_threshold} SEK/kWh)`;
+    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings?.high_price_threshold ?? 1.50} SEK/kWh)`;
   } else if (priceClassification === 'low') {
     // LOW price - add +2°C for aggressive heating
-    newTemp = Math.min(settings.max_pump_temp, baselineTemp + 2);
-    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (threshold: ${settings.low_price_threshold} SEK/kWh)`;
+    newTemp = Math.min(settings?.max_pump_temp ?? 35, baselineTemp + 2);
+    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (threshold: ${settings?.low_price_threshold ?? 0.05} SEK/kWh)`;
   } else if (priceClassification === 'high') {
     // HIGH price - reduce heating by -2°C
-    newTemp = Math.max(settings.min_pump_temp, baselineTemp - 2);
-    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (threshold: ${settings.normal_price_threshold} SEK/kWh)`;
+    newTemp = Math.max(settings?.min_pump_temp ?? 18, baselineTemp - 2);
+    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (threshold: ${settings?.normal_price_threshold ?? 0.15} SEK/kWh)`;
   } else {
     // NORMAL price - use baseline temperature
     newTemp = baselineTemp;
@@ -230,10 +230,10 @@ function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, ta
 }
 
 function classifyPrice(currentPrice, settings) {
-  // Use user-configurable thresholds from settings
-  const LOW_THRESHOLD = settings.low_price_threshold || 0.05;
-  const NORMAL_THRESHOLD = settings.normal_price_threshold || 0.15;
-  const HIGH_THRESHOLD = settings.high_price_threshold || 1.50;
+  // Use user-configurable thresholds from settings, with fallback defaults
+  const LOW_THRESHOLD = settings?.low_price_threshold ?? 0.05;
+  const NORMAL_THRESHOLD = settings?.normal_price_threshold ?? 0.15;
+  const HIGH_THRESHOLD = settings?.high_price_threshold ?? 1.50;
   
   if (currentPrice <= LOW_THRESHOLD) return 'low';
   if (currentPrice >= HIGH_THRESHOLD) return 'shutdown'; // Special case for pump shutdown
