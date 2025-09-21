@@ -505,7 +505,7 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-2">
               <Switch 
-                checked={data.heatPump?.power_status === 'on'}
+                checked={data.heatPump?.power_status === 'on' || data.heatPump?.power_status === 'standby'}
                 onCheckedChange={handlePowerToggle}
                 disabled={!data.heatPump || !HeatPumpStatusService.isDeviceOnline(data.heatPump)}
               />
