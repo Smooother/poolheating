@@ -111,16 +111,27 @@ async function collectPriceData() {
 }
 
 async function fetchElprisetData(zone, date) {
-  const dateStr = date.toISOString().split('T')[0];
-  const url = `https://api.elprisetjustnu.se/v1/prices/${dateStr}/${zone}.json`;
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const dateStr = `${month}-${day}`;
+  
+  const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${dateStr}_${zone}.json`;
   
   try {
+    console.log(`Fetching price data for ${zone} on ${dateStr}:`, url);
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      console.warn(`No data available for ${zone} on ${dateStr}: ${response.status}`);
+      return [];
     }
     
     const data = await response.json();
+    
+    if (!Array.isArray(data)) {
+      console.error(`Invalid response format for ${zone} on ${dateStr}`);
+      return [];
+    }
     
     return data.map(item => ({
       start: new Date(item.time_start),
@@ -148,16 +159,18 @@ async function savePriceData(prices, zone) {
     resolution: point.resolution
   }));
 
-  // Use individual inserts with ON CONFLICT DO NOTHING for now
-  for (const record of data) {
-    await supabase
-      .from('price_data')
-      .insert(record)
-      .select()
-      .then(({ error }) => {
-        if (error && !error.message.includes('duplicate key')) {
-          throw error;
-        }
-      });
+  // Use upsert to handle duplicates
+  const { data: result, error } = await supabase
+    .from('price_data')
+    .upsert(data, { 
+      onConflict: 'bidding_zone,start_time,provider',
+      ignoreDuplicates: false 
+    });
+
+  if (error) {
+    console.error(`Failed to save price data for ${zone}:`, error);
+    throw error;
   }
+
+  console.log(`Saved ${data.length} price points for ${zone}`);
 }
