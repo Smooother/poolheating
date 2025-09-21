@@ -14,10 +14,4 @@
       "schedule": "0 6 * * *"
     }
   ],
-  "env": {
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "TUYA_CLIENT_ID": "@tuya_client_id",
-    "TUYA_CLIENT_SECRET": "@tuya_client_secret"
-  }
 }
