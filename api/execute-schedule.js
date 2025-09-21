@@ -31,15 +31,14 @@ async function executeScheduledActions() {
   const now = new Date();
   const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 5-minute window
   
-  // Get scheduled actions that should be executed now
+  // Get scheduled actions that should be executed now (future automation_log entries)
   const { data: scheduledActions, error: fetchError } = await supabase
-    .from('automation_schedule')
+    .from('automation_log')
     .select('*')
     .eq('user_id', 'default')
-    .eq('executed', false)
-    .gte('scheduled_time', fiveMinutesAgo.toISOString())
-    .lte('scheduled_time', now.toISOString())
-    .order('scheduled_time', { ascending: true });
+    .gte('timestamp', fiveMinutesAgo.toISOString())
+    .lte('timestamp', now.toISOString())
+    .order('timestamp', { ascending: true });
 
   if (fetchError) {
     throw new Error(`Failed to fetch scheduled actions: ${fetchError.message}`);
@@ -60,7 +59,7 @@ async function executeScheduledActions() {
       let success = false;
       let message = '';
 
-      if (action.should_shutdown) {
+      if (action.new_pump_temp === null) {
         // Turn off pump
         const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
           body: {
@@ -94,7 +93,7 @@ async function executeScheduledActions() {
           body: {
             action: 'sendCommand',
             deviceId: process.env.TUYA_DEVICE_ID,
-            commands: [{ code: 'SetTemp', value: action.target_temperature }]
+            commands: [{ code: 'SetTemp', value: action.new_pump_temp }]
           }
         });
         
@@ -102,22 +101,21 @@ async function executeScheduledActions() {
           throw new Error(`Failed to set temperature: ${tempError?.message || tempResult?.msg}`);
         }
         success = true;
-        message = `Temperature set to ${action.target_temperature}°C`;
+        message = `Temperature set to ${action.new_pump_temp}°C`;
       }
 
-      // Mark as executed
+      // Mark as executed by updating the action_reason
       await supabase
-        .from('automation_schedule')
+        .from('automation_log')
         .update({
-          executed: true,
-          executed_at: now.toISOString()
+          action_reason: `${action.action_reason} | EXECUTED: ${message}`
         })
         .eq('id', action.id);
 
       results.push({
         id: action.id,
-        scheduled_time: action.scheduled_time,
-        action: action.reason,
+        scheduled_time: action.timestamp,
+        action: action.action_reason,
         success: true,
         message: message
       });
@@ -126,8 +124,8 @@ async function executeScheduledActions() {
       console.error(`Error executing action ${action.id}:`, error);
       results.push({
         id: action.id,
-        scheduled_time: action.scheduled_time,
-        action: action.reason,
+        scheduled_time: action.timestamp,
+        action: action.action_reason,
         success: false,
         error: error.message
       });
