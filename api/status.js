@@ -31,17 +31,14 @@ export default async function handler(req, res) {
       .limit(1)
       .single();
 
-    // Get current price data - find the price for the current hour
-    const currentHour = new Date(now);
-    currentHour.setMinutes(0, 0, 0);
-    const nextHour = new Date(currentHour.getTime() + 3600000);
-    
+    // Get current price data - find the most recent price
     const { data: currentPrice } = await supabase
       .from('price_data')
       .select('*')
       .eq('bidding_zone', area)
-      .gte('start_time', currentHour.toISOString())
-      .lt('start_time', nextHour.toISOString())
+      .lte('start_time', now.toISOString())
+      .order('start_time', { ascending: false })
+      .limit(1)
       .single();
 
     // Get automation settings
