@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 // Generate a secure random API key
 const apiKey = crypto.randomBytes(32).toString('hex');
