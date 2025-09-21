@@ -112,6 +112,64 @@ async function runAutomation() {
     settings
   );
 
+  const priceClassification = classifyPrice(parseFloat(currentPrice.price_value), settings);
+  let actionTaken = '';
+
+  // Execute the automation action
+  if (result.shouldShutdown) {
+    // Turn off pump completely
+    try {
+      const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
+        body: {
+          action: 'sendCommand',
+          deviceId: process.env.TUYA_DEVICE_ID,
+          commands: [{ code: 'Power', value: false }]
+        }
+      });
+      
+      if (powerError || !powerResult?.success) {
+        throw new Error(`Failed to turn off pump: ${powerError?.message || powerResult?.msg}`);
+      }
+      actionTaken = 'Pump turned OFF due to high price';
+    } catch (error) {
+      console.error('Error turning off pump:', error);
+      actionTaken = `Failed to turn off pump: ${error.message}`;
+    }
+  } else {
+    // Set temperature (pump should be on)
+    try {
+      // First ensure pump is on
+      const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
+        body: {
+          action: 'sendCommand',
+          deviceId: process.env.TUYA_DEVICE_ID,
+          commands: [{ code: 'Power', value: true }]
+        }
+      });
+      
+      if (powerError || !powerResult?.success) {
+        console.warn('Failed to ensure pump is on:', powerError?.message || powerResult?.msg);
+      }
+
+      // Then set temperature
+      const { data: tempResult, error: tempError } = await supabase.functions.invoke('tuya-proxy', {
+        body: {
+          action: 'sendCommand',
+          deviceId: process.env.TUYA_DEVICE_ID,
+          commands: [{ code: 'SetTemp', value: result.newTemp }]
+        }
+      });
+      
+      if (tempError || !tempResult?.success) {
+        throw new Error(`Failed to set temperature: ${tempError?.message || tempResult?.msg}`);
+      }
+      actionTaken = `Temperature set to ${result.newTemp}°C`;
+    } catch (error) {
+      console.error('Error setting temperature:', error);
+      actionTaken = `Failed to set temperature: ${error.message}`;
+    }
+  }
+
   // Log the automation decision
   await supabase.from('automation_log').insert({
     user_id: 'default',
@@ -120,17 +178,19 @@ async function runAutomation() {
     current_pool_temp: heatPumpStatus?.water_temp || null,
     target_pool_temp: settings.target_pool_temp,
     current_pump_temp: heatPumpStatus?.target_temp || null,
-    new_pump_temp: result.newTemp,
-    price_classification: classifyPrice(parseFloat(currentPrice.price_value), forecastPrices),
-    action_reason: result.reason
+    new_pump_temp: result.shouldShutdown ? null : result.newTemp,
+    price_classification: priceClassification,
+    action_reason: `${result.reason} | ${actionTaken}`
   });
 
   return {
     success: true,
     currentPrice: parseFloat(currentPrice.price_value),
-    newTemp: result.newTemp,
+    newTemp: result.shouldShutdown ? null : result.newTemp,
+    shouldShutdown: result.shouldShutdown,
     reason: result.reason,
-    priceClassification: classifyPrice(parseFloat(currentPrice.price_value), forecastPrices)
+    actionTaken,
+    priceClassification
   };
 }
 
@@ -139,18 +199,23 @@ function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, ta
   const baselineTemp = currentPumpTemp || targetPoolTemp;
   let newTemp = baselineTemp;
   let reason = '';
+  let shouldShutdown = false;
 
-  // Classify current price
-  const priceClassification = classifyPrice(currentPrice, []);
+  // Classify current price using user settings
+  const priceClassification = classifyPrice(currentPrice, settings);
   
-  if (priceClassification === 'low') {
+  if (priceClassification === 'shutdown') {
+    // SHUTDOWN price - turn off pump completely
+    shouldShutdown = true;
+    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings.high_price_threshold} SEK/kWh)`;
+  } else if (priceClassification === 'low') {
     // LOW price - add +2°C for aggressive heating
     newTemp = Math.min(settings.max_pump_temp, baselineTemp + 2);
-    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C`;
+    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (threshold: ${settings.low_price_threshold} SEK/kWh)`;
   } else if (priceClassification === 'high') {
     // HIGH price - reduce heating by -2°C
     newTemp = Math.max(settings.min_pump_temp, baselineTemp - 2);
-    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C`;
+    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (threshold: ${settings.normal_price_threshold} SEK/kWh)`;
   } else {
     // NORMAL price - use baseline temperature
     newTemp = baselineTemp;
@@ -159,17 +224,19 @@ function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, ta
 
   return {
     newTemp: Math.round(newTemp),
+    shouldShutdown,
     reason
   };
 }
 
-function classifyPrice(currentPrice, prices) {
-  // Use absolute thresholds for price classification
-  // These can be adjusted based on your electricity price patterns
-  const LOW_THRESHOLD = 0.05;   // Below 0.05 SEK/kWh = LOW
-  const HIGH_THRESHOLD = 0.15;  // Above 0.15 SEK/kWh = HIGH
+function classifyPrice(currentPrice, settings) {
+  // Use user-configurable thresholds from settings
+  const LOW_THRESHOLD = settings.low_price_threshold || 0.05;
+  const NORMAL_THRESHOLD = settings.normal_price_threshold || 0.15;
+  const HIGH_THRESHOLD = settings.high_price_threshold || 1.50;
   
   if (currentPrice <= LOW_THRESHOLD) return 'low';
-  if (currentPrice >= HIGH_THRESHOLD) return 'high';
+  if (currentPrice >= HIGH_THRESHOLD) return 'shutdown'; // Special case for pump shutdown
+  if (currentPrice >= NORMAL_THRESHOLD) return 'high';
   return 'normal';
 }
