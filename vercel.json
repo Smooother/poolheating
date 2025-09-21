@@ -4,6 +4,16 @@
       "runtime": "nodejs18.x"
     }
   },
+  "crons": [
+    {
+      "path": "/api/prices",
+      "schedule": "20 12 * * *"
+    },
+    {
+      "path": "/api/automation",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "env": {
     "SUPABASE_URL": "@supabase_url",
     "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
