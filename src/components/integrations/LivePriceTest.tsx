@@ -3,8 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { fetchPrices, PriceProviderConfig, PricePoint } from '@/services/priceService';
-import { CONFIG } from '@/lib/config';
+// Removed unused imports - now using backend API directly
 
 interface LivePriceData {
   currentPrice: number;
@@ -28,40 +27,34 @@ export const LivePriceTest = () => {
     try {
       setData(prev => ({ ...prev, status: 'loading' }));
 
+      // Fetch price data from our backend API
+      const response = await fetch('/api/prices');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const priceData = await response.json();
+      
+      // Find current hour and next hour prices from the database
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 2);
-
-      const config: PriceProviderConfig = {
-        biddingZone: CONFIG.biddingZone,
-        currency: CONFIG.currency,
-        timezone: CONFIG.timezone,
-      };
-
-      const prices = await fetchPrices('elpriset', config, today, tomorrow);
-      
-      // Save fetched prices to database
-      const { savePriceData } = await import('@/services/priceDataService');
-      await savePriceData(prices, CONFIG.biddingZone);
-      
-      // Find current hour and next hour prices
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
       const nextHour = new Date(currentHour.getTime() + 60 * 60 * 1000);
       
-      const currentPrice = prices.find(p => 
-        p.start.getTime() === currentHour.getTime()
-      );
+      const currentPrice = priceData.prices?.find((p: any) => {
+        const priceTime = new Date(p.start_time);
+        return priceTime.getTime() === currentHour.getTime();
+      });
       
-      const nextHourPrice = prices.find(p => 
-        p.start.getTime() === nextHour.getTime()
-      );
+      const nextHourPrice = priceData.prices?.find((p: any) => {
+        const priceTime = new Date(p.start_time);
+        return priceTime.getTime() === nextHour.getTime();
+      });
 
       setData({
-        currentPrice: currentPrice?.value || 0,
-        nextHourPrice: nextHourPrice?.value || 0,
-        pricesCount: prices.length,
-        lastUpdate: new Date(),
+        currentPrice: currentPrice?.price_value || 0,
+        nextHourPrice: nextHourPrice?.price_value || 0,
+        pricesCount: priceData.prices?.length || 0,
+        lastUpdate: new Date(priceData.lastUpdated || new Date()),
         status: 'success'
       });
 
@@ -71,6 +64,38 @@ export const LivePriceTest = () => {
         ...prev,
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error'
+      }));
+    }
+  };
+
+  const triggerPriceCollection = async () => {
+    try {
+      setData(prev => ({ ...prev, status: 'loading' }));
+      
+      // Trigger price collection
+      const response = await fetch('/api/prices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      console.log('Price collection result:', result);
+      
+      // Refresh the data after collection
+      await fetchLiveData();
+      
+    } catch (error) {
+      console.error('Failed to trigger price collection:', error);
+      setData(prev => ({
+        ...prev,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Failed to collect prices'
       }));
     }
   };
@@ -120,6 +145,15 @@ export const LivePriceTest = () => {
         </div>
         <div className="flex items-center space-x-2">
           {getStatusBadge()}
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={triggerPriceCollection}
+            disabled={data.status === 'loading'}
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${data.status === 'loading' ? 'animate-spin' : ''}`} />
+            Collect Prices
+          </Button>
           <Button 
             size="sm" 
             variant="outline" 
