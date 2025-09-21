@@ -2,7 +2,7 @@ import Foundation
 
 struct Config {
     // MARK: - API Configuration
-    static let baseURL = "https://your-app.vercel.app"
+    static let baseURL = "https://poolheating.vercel.app"
     
     // MARK: - API Endpoints
     struct Endpoints {
