@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const now = new Date();
-    const area = process.env.PRICE_AREA || 'SE3';
+    const area = (process.env.PRICE_AREA || 'SE3').trim();
 
     // Get current heat pump status
     const { data: heatPumpStatus } = await supabase
