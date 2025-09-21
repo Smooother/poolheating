@@ -202,6 +202,29 @@ poolheating/
 └── public/               # Static assets
 ```
 
+## 🔒 Security
+
+The pool heating system implements comprehensive security measures:
+
+### Database Security
+- **Row Level Security (RLS)** enabled on all tables
+- **Service role** for backend operations with restricted access
+- **Extensions isolated** in dedicated `extensions` schema
+- **Audit logging** for sensitive operations
+- **Security hardening** following PostgreSQL best practices
+
+### API Security
+- **Environment variables** for sensitive configuration
+- **CORS** properly configured for API endpoints
+- **Input validation** on all API endpoints
+- **Error handling** without information leakage
+
+### Production Security
+- **Vercel environment** with secure deployment
+- **Supabase** with proper RLS policies
+- **Tuya API** integration with secure token management
+- **Price data** collection with rate limiting
+
 ## 🤝 Contributing
 
 1. Fork the repository
