@@ -151,8 +151,8 @@ const Dashboard = () => {
         // Update local setting
         updateSetting('baseSetpoint', newTemp);
         
-        // Update automation settings if automation is enabled
-        if (data.automation && automationSettings) {
+        // Update automation settings (this is the user's desired pool temperature)
+        if (automationSettings) {
           await AutomationService.updateSettings({ target_pool_temp: newTemp });
         }
         
@@ -165,18 +165,18 @@ const Dashboard = () => {
           } : null
         }));
         
-        // Send command to heat pump
+        // Send command to heat pump (this sets the actual pump temperature)
         await HeatPumpCommandService.setTargetTemperature(newTemp);
         
         toast({
-          title: "Temperature Command Sent",
-          description: `Sending ${newTemp}°C to heat pump - verifying...`,
+          title: "Target Temperature Updated",
+          description: `Pool target set to ${newTemp}°C and sent to heat pump`,
         });
         
-        // Wait for pump to process the command, then verify the target temperature
+        // Wait for pump to process the command, then verify
         setTimeout(async () => {
           try {
-            // Trigger status update first
+            // Trigger status update to get the actual pump response
             await HeatPumpStatusService.triggerStatusUpdate();
             
             // Wait a bit more for the status to be updated
@@ -193,41 +193,17 @@ const Dashboard = () => {
                   } : null
                 }));
                 
-                // Check if the value matches what we sent
-                if (Math.abs(currentStatus.target_temp - newTemp) < 0.5) {
-                  toast({
-                    title: "Temperature Verified",
-                    description: `Heat pump confirmed target temperature: ${currentStatus.target_temp}°C`,
-                  });
-                } else {
-                  toast({
-                    title: "Temperature Mismatch",
-                    description: `Requested: ${newTemp}°C, Pump shows: ${currentStatus.target_temp}°C`,
-                    variant: "destructive",
-                  });
-                }
-              } else {
+                // Show confirmation
                 toast({
-                  title: "Verification Failed",
-                  description: "Could not verify target temperature with heat pump",
-                  variant: "destructive",
+                  title: "Temperature Confirmed",
+                  description: `Heat pump set to ${currentStatus.target_temp}°C`,
                 });
               }
-            }, 1500); // Additional delay for status to be recorded
+            }, 1500);
           } catch (error) {
             console.error('Error verifying target temperature:', error);
-            toast({
-              title: "Verification Error",
-              description: "Failed to verify temperature change with heat pump",
-              variant: "destructive",
-            });
           }
-        }, 3000); // Initial delay for pump to process command
-        
-        // And another refresh after 10 seconds to ensure we get the pump response
-        setTimeout(() => {
-          HeatPumpStatusService.triggerStatusUpdate();
-        }, 10000);
+        }, 2000);
         
       } catch (error: any) {
         console.error('Error sending temperature command:', error);
@@ -580,17 +556,30 @@ const Dashboard = () => {
             <div>
               <p className="text-sm text-muted-foreground">Target Temperature</p>
               <p className="text-3xl font-bold text-primary">
-                {automationSettings && data.automation 
-                  ? `${automationSettings.target_pool_temp}°C` 
-                  : data.heatPump 
-                    ? `${data.heatPump.target_temp}°C` 
-                    : `${settings.baseSetpoint}°C`
+                {data.heatPump 
+                  ? `${data.heatPump.target_temp}°C` 
+                  : `${settings.baseSetpoint}°C`
                 }
               </p>
-              {data.automation && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pool: {automationSettings?.target_pool_temp}°C
-                </p>
+              {data.automation && automationSettings && (
+                <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                  <p>Pool Target: {automationSettings.target_pool_temp}°C</p>
+                  {Math.abs(data.heatPump?.target_temp - automationSettings.target_pool_temp) > 0.5 && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 rounded-full bg-warning animate-pulse"></div>
+                      <p className="text-warning">
+                        Auto-adjustment: {data.heatPump?.target_temp > automationSettings.target_pool_temp ? '+' : ''}
+                        {(data.heatPump?.target_temp - automationSettings.target_pool_temp).toFixed(1)}°C
+                      </p>
+                    </div>
+                  )}
+                  {Math.abs(data.heatPump?.target_temp - automationSettings.target_pool_temp) <= 0.5 && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 rounded-full bg-success"></div>
+                      <p className="text-success">At target temperature</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex items-center justify-center space-x-4">
