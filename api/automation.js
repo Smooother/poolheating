@@ -135,35 +135,41 @@ async function runAutomation() {
 }
 
 function calculateOptimalPumpTemp(currentPrice, avgForecast, currentPoolTemp, targetPoolTemp, currentPumpTemp, settings) {
-  const priceRatio = currentPrice / avgForecast;
-  let tempAdjustment = 0;
+  // Use current pump temperature as baseline (this is the actual SetTemp from the pump)
+  const baselineTemp = currentPumpTemp || targetPoolTemp;
+  let newTemp = baselineTemp;
+  let reason = '';
 
-  if (priceRatio < 0.8) {
-    // Low price - heat aggressively
-    tempAdjustment = settings.temp_tolerance * settings.price_sensitivity;
-  } else if (priceRatio > 1.2) {
-    // High price - reduce heating
-    tempAdjustment = -settings.temp_tolerance * settings.price_sensitivity;
+  // Classify current price
+  const priceClassification = classifyPrice(currentPrice, []);
+  
+  if (priceClassification === 'low') {
+    // LOW price - add +2°C for aggressive heating
+    newTemp = Math.min(settings.max_pump_temp, baselineTemp + 2);
+    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C`;
+  } else if (priceClassification === 'high') {
+    // HIGH price - reduce heating by -2°C
+    newTemp = Math.max(settings.min_pump_temp, baselineTemp - 2);
+    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C`;
+  } else {
+    // NORMAL price - use baseline temperature
+    newTemp = baselineTemp;
+    reason = `NORMAL price (${currentPrice.toFixed(3)} SEK/kWh) - baseline temperature`;
   }
 
-  const newTemp = Math.max(
-    settings.min_pump_temp,
-    Math.min(settings.max_pump_temp, targetPoolTemp + tempAdjustment)
-  );
-
   return {
-    newTemp,
-    reason: `Price ratio: ${priceRatio.toFixed(2)}, adjustment: ${tempAdjustment.toFixed(1)}°C`
+    newTemp: Math.round(newTemp),
+    reason
   };
 }
 
 function classifyPrice(currentPrice, prices) {
-  if (prices.length === 0) return 'normal';
+  // Use absolute thresholds for price classification
+  // These can be adjusted based on your electricity price patterns
+  const LOW_THRESHOLD = 0.05;   // Below 0.05 SEK/kWh = LOW
+  const HIGH_THRESHOLD = 0.15;  // Above 0.15 SEK/kWh = HIGH
   
-  const priceValues = prices.map(p => parseFloat(p.price_value));
-  const avg = priceValues.reduce((a, b) => a + b, 0) / priceValues.length;
-  
-  if (currentPrice < avg * 0.8) return 'low';
-  if (currentPrice > avg * 1.2) return 'high';
+  if (currentPrice <= LOW_THRESHOLD) return 'low';
+  if (currentPrice >= HIGH_THRESHOLD) return 'high';
   return 'normal';
 }

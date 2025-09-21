@@ -23,13 +23,43 @@ export default async function handler(req, res) {
     const now = new Date();
     const area = (process.env.PRICE_AREA || 'SE3').trim();
 
-    // Get current heat pump status
-    const { data: heatPumpStatus } = await supabase
-      .from('heat_pump_status')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Get current heat pump status - fetch real-time from Tuya API
+    let heatPumpStatus;
+    try {
+      // First try to get real-time status from Tuya
+      const { data: tuyaResult, error: tuyaError } = await supabase.functions.invoke('tuya-proxy', {
+        body: {
+          action: 'getStatus',
+          deviceId: process.env.TUYA_DEVICE_ID
+        }
+      });
+      
+      if (tuyaResult?.success && tuyaResult.status) {
+        // Use real-time data from Tuya
+        heatPumpStatus = tuyaResult.status;
+        console.log('Using real-time Tuya status:', heatPumpStatus);
+      } else {
+        // Fallback to cached database data
+        const { data: cachedStatus } = await supabase
+          .from('heat_pump_status')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        heatPumpStatus = cachedStatus;
+        console.log('Using cached status:', heatPumpStatus);
+      }
+    } catch (error) {
+      console.error('Error fetching pump status:', error);
+      // Fallback to cached data
+      const { data: cachedStatus } = await supabase
+        .from('heat_pump_status')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      heatPumpStatus = cachedStatus;
+    }
 
     // Get current price data - find the most recent price
     const { data: currentPrice } = await supabase
