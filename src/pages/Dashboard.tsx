@@ -154,6 +154,9 @@ const Dashboard = () => {
         // Update automation settings (this is the user's desired pool temperature)
         if (automationSettings) {
           await AutomationService.updateSettings({ target_pool_temp: newTemp });
+          
+          // Update the local automation settings state immediately for UI responsiveness
+          setAutomationSettings(prev => prev ? { ...prev, target_pool_temp: newTemp } : null);
         }
         
         toast({
