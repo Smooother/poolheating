@@ -249,10 +249,8 @@ function parseDeviceStatus(statusArray) {
       case 'SetTemp':
         status.target_temp = item.value;
         break;
-      case 'CurrentTemp':
-        status.current_temp = item.value;
-        break;
-      case 'WaterTemp':
+      case 'WInTemp':
+        // WInTemp is the actual water temperature
         status.water_temp = item.value;
         break;
       case 'Power':
@@ -260,6 +258,16 @@ function parseDeviceStatus(statusArray) {
         break;
       case 'SetMode':
         status.mode = item.value;
+        break;
+      case 'SpeedPercentage':
+        status.speed_percentage = item.value;
+        break;
+      // Keep some legacy mappings for backward compatibility
+      case 'CurrentTemp':
+        status.current_temp = item.value;
+        break;
+      case 'WaterTemp':
+        status.water_temp = item.value;
         break;
       case 'Speed':
         status.speed_percentage = item.value;
