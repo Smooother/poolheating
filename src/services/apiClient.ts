@@ -29,6 +29,11 @@ class ApiClient {
   }
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
+    // In development mode, mock the API responses
+    if (import.meta.env.DEV) {
+      return this.mockApiResponse(url, options);
+    }
+
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -48,6 +53,36 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  private async mockApiResponse<T>(url: string, options: RequestInit): Promise<T> {
+    // Mock responses for development
+    if (url === '/api/health') {
+      return { status: 'ok', timestamp: new Date().toISOString() } as T;
+    }
+    
+    if (url === '/api/status') {
+      return {
+        heatPump: {
+          power_status: 'on',
+          target_temp: 25,
+          water_temp: 22,
+          speed_percentage: 50,
+          online: true
+        },
+        automation: {
+          enabled: true,
+          target_pool_temp: 25
+        },
+        currentPrice: {
+          price: 0.45,
+          area: 'SE3'
+        }
+      } as T;
+    }
+
+    // Default mock response
+    return { success: true, message: 'Development mode - API not available' } as T;
   }
 
   // Specific API methods

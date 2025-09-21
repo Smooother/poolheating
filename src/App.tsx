@@ -22,6 +22,13 @@ const App = () => {
   useEffect(() => {
     // Check if API key is already set and valid
     const checkAuth = async () => {
+      // Skip authentication in development mode
+      if (import.meta.env.DEV) {
+        setIsAuthenticated(true);
+        setIsCheckingAuth(false);
+        return;
+      }
+
       const apiKey = apiClient.getApiKey();
       if (apiKey) {
         try {
