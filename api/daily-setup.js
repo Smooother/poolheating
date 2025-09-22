@@ -90,23 +90,95 @@ async function performDailySetup() {
 async function collectPriceData() {
   const zones = ['SE1', 'SE2', 'SE3', 'SE4'];
   let totalSaved = 0;
+  const results = {};
   
   for (const zone of zones) {
     try {
-      const prices = await fetchElprisetData(zone, new Date());
-      if (prices.length > 0) {
-        await savePriceData(prices, zone);
-        totalSaved += prices.length;
+      console.log(`Collecting price data for ${zone}...`);
+      
+      // Get the last data date for this zone
+      const { data: lastData } = await supabase
+        .from('price_data')
+        .select('start_time')
+        .eq('bidding_zone', zone)
+        .order('start_time', { ascending: false })
+        .limit(1)
+        .single();
+      
+      let startDate;
+      if (lastData) {
+        // Start from the day after the last data
+        startDate = new Date(lastData.start_time);
+        startDate.setDate(startDate.getDate() + 1);
+        console.log(`Last data for ${zone}: ${lastData.start_time}, starting from: ${startDate.toISOString()}`);
+      } else {
+        // No data exists, start from 7 days ago
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+        console.log(`No existing data for ${zone}, starting from 7 days ago: ${startDate.toISOString()}`);
       }
+      
+      // Collect data from startDate to today
+      const endDate = new Date();
+      const currentDate = new Date(startDate);
+      let zoneSaved = 0;
+      let daysProcessed = 0;
+      
+      while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        console.log(`Fetching data for ${zone} on ${dateStr}...`);
+        
+        try {
+          const prices = await fetchElprisetData(zone, currentDate);
+          if (prices.length > 0) {
+            await savePriceData(prices, zone);
+            zoneSaved += prices.length;
+            console.log(`✅ Saved ${prices.length} price points for ${zone} on ${dateStr}`);
+          } else {
+            console.log(`⚠️ No price data available for ${zone} on ${dateStr}`);
+          }
+        } catch (dayError) {
+          console.error(`❌ Failed to fetch data for ${zone} on ${dateStr}:`, dayError.message);
+          // Continue with next day instead of failing completely
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+        daysProcessed++;
+        
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      totalSaved += zoneSaved;
+      results[zone] = {
+        success: true,
+        saved: zoneSaved,
+        daysProcessed,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      };
+      console.log(`✅ Completed ${zone}: ${zoneSaved} price points saved over ${daysProcessed} days`);
+      
     } catch (error) {
-      console.error(`Error collecting prices for ${zone}:`, error);
+      console.error(`❌ Error collecting data for ${zone}:`, error);
+      results[zone] = {
+        success: false,
+        error: error.message
+      };
+      // Don't throw - continue with other zones
     }
   }
   
+  const successfulZones = Object.values(results).filter(r => r.success).length;
+  const totalZones = zones.length;
+  
   return {
-    success: true,
-    message: `Collected and saved ${totalSaved} price points`,
-    totalSaved
+    success: successfulZones > 0, // Success if at least one zone worked
+    message: `Collected and saved ${totalSaved} price points from ${successfulZones}/${totalZones} zones`,
+    totalSaved,
+    zoneResults: results,
+    successfulZones,
+    totalZones
   };
 }
 
