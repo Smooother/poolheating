@@ -28,29 +28,62 @@ export default async function handler(req, res) {
 }
 
 async function performDailySetup() {
-  console.log('Starting daily setup at 1pm CET...');
+  const startTime = new Date();
+  console.log(`Starting daily setup at ${startTime.toISOString()}...`);
   
-  // Step 1: Collect new price data
-  console.log('Step 1: Collecting price data...');
-  const priceResult = await collectPriceData();
+  const results = {
+    priceCollection: null,
+    scheduleCreation: null,
+    immediateExecution: null
+  };
   
-  // Step 2: Create 24-hour automation schedule
-  console.log('Step 2: Creating automation schedule...');
-  const scheduleResult = await createDailySchedule();
+  try {
+    // Step 1: Collect new price data
+    console.log('Step 1: Collecting price data...');
+    results.priceCollection = await collectPriceData();
+    console.log('✅ Price collection completed:', results.priceCollection);
+  } catch (error) {
+    console.error('❌ Price collection failed:', error);
+    results.priceCollection = { success: false, error: error.message };
+  }
   
-  // Step 3: Execute any immediate actions
-  console.log('Step 3: Executing immediate actions...');
-  const executionResult = await executeScheduledActions();
+  try {
+    // Step 2: Create 24-hour automation schedule
+    console.log('Step 2: Creating automation schedule...');
+    results.scheduleCreation = await createDailySchedule();
+    console.log('✅ Schedule creation completed:', results.scheduleCreation);
+  } catch (error) {
+    console.error('❌ Schedule creation failed:', error);
+    results.scheduleCreation = { success: false, error: error.message };
+  }
+  
+  try {
+    // Step 3: Execute any immediate actions
+    console.log('Step 3: Executing immediate actions...');
+    results.immediateExecution = await executeScheduledActions();
+    console.log('✅ Immediate execution completed:', results.immediateExecution);
+  } catch (error) {
+    console.error('❌ Immediate execution failed:', error);
+    results.immediateExecution = { success: false, error: error.message };
+  }
+  
+  const endTime = new Date();
+  const duration = endTime - startTime;
+  
+  // Check if any critical steps failed
+  const criticalFailures = [
+    results.priceCollection?.success === false,
+    results.scheduleCreation?.success === false
+  ].filter(Boolean).length;
   
   return {
-    success: true,
-    message: 'Daily setup completed successfully',
-    timestamp: new Date().toISOString(),
-    results: {
-      priceCollection: priceResult,
-      scheduleCreation: scheduleResult,
-      immediateExecution: executionResult
-    }
+    success: criticalFailures === 0,
+    message: criticalFailures === 0 
+      ? 'Daily setup completed successfully' 
+      : `Daily setup completed with ${criticalFailures} critical failures`,
+    timestamp: endTime.toISOString(),
+    duration: `${duration}ms`,
+    results
   };
 }
 
