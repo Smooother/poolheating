@@ -118,9 +118,17 @@ async function runAutomation() {
   if (result.shouldShutdown) {
     // Turn off pump completely
     try {
+      // Get Tuya configuration for uid
+      const { data: tuyaConfig } = await supabase
+        .from('tuya_config')
+        .select('uid')
+        .eq('id', 'default')
+        .single();
+
       const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
         body: {
           action: 'sendCommand',
+          uid: tuyaConfig?.uid,
           deviceId: process.env.TUYA_DEVICE_ID,
           commands: [{ code: 'Power', value: false }]
         }
@@ -137,10 +145,18 @@ async function runAutomation() {
   } else {
     // Set temperature (pump should be on)
     try {
+      // Get Tuya configuration for uid
+      const { data: tuyaConfig } = await supabase
+        .from('tuya_config')
+        .select('uid')
+        .eq('id', 'default')
+        .single();
+
       // First ensure pump is on
       const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
         body: {
           action: 'sendCommand',
+          uid: tuyaConfig?.uid,
           deviceId: process.env.TUYA_DEVICE_ID,
           commands: [{ code: 'Power', value: true }]
         }
@@ -154,6 +170,7 @@ async function runAutomation() {
       const { data: tempResult, error: tempError } = await supabase.functions.invoke('tuya-proxy', {
         body: {
           action: 'sendCommand',
+          uid: tuyaConfig?.uid,
           deviceId: process.env.TUYA_DEVICE_ID,
           commands: [{ code: 'SetTemp', value: result.newTemp }]
         }
