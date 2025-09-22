@@ -125,17 +125,22 @@ async function runAutomation() {
         .eq('id', 'default')
         .single();
 
-      const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
-        body: {
+      const powerResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.API_KEY
+        },
+        body: JSON.stringify({
           action: 'sendCommand',
-          uid: tuyaConfig?.uid,
-          deviceId: process.env.TUYA_DEVICE_ID,
           commands: [{ code: 'Power', value: false }]
-        }
+        })
       });
       
-      if (powerError || !powerResult?.success) {
-        throw new Error(`Failed to turn off pump: ${powerError?.message || powerResult?.msg}`);
+      const powerResult = await powerResponse.json();
+      
+      if (!powerResult.success) {
+        throw new Error(`Failed to turn off pump: ${powerResult.error || 'Unknown error'}`);
       }
       actionTaken = 'Pump turned OFF due to high price';
     } catch (error) {
@@ -153,31 +158,41 @@ async function runAutomation() {
         .single();
 
       // First ensure pump is on
-      const { data: powerResult, error: powerError } = await supabase.functions.invoke('tuya-proxy', {
-        body: {
+      const powerOnResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.API_KEY
+        },
+        body: JSON.stringify({
           action: 'sendCommand',
-          uid: tuyaConfig?.uid,
-          deviceId: process.env.TUYA_DEVICE_ID,
           commands: [{ code: 'Power', value: true }]
-        }
+        })
       });
       
-      if (powerError || !powerResult?.success) {
-        console.warn('Failed to ensure pump is on:', powerError?.message || powerResult?.msg);
+      const powerOnResult = await powerOnResponse.json();
+      
+      if (!powerOnResult.success) {
+        console.warn('Failed to ensure pump is on:', powerOnResult.error || 'Unknown error');
       }
 
-      // Then set temperature
-      const { data: tempResult, error: tempError } = await supabase.functions.invoke('tuya-proxy', {
-        body: {
-          action: 'sendCommand',
-          uid: tuyaConfig?.uid,
-          deviceId: process.env.TUYA_DEVICE_ID,
-          commands: [{ code: 'SetTemp', value: result.newTemp }]
-        }
+      // Then set temperature using the heatpump API
+      const tempResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.API_KEY
+        },
+        body: JSON.stringify({
+          action: 'setTemperature',
+          temperature: result.newTemp
+        })
       });
       
-      if (tempError || !tempResult?.success) {
-        throw new Error(`Failed to set temperature: ${tempError?.message || tempResult?.msg}`);
+      const tempResult = await tempResponse.json();
+      
+      if (!tempResult.success) {
+        throw new Error(`Failed to set temperature: ${tempResult.error || 'Unknown error'}`);
       }
       actionTaken = `Temperature set to ${result.newTemp}°C`;
     } catch (error) {
