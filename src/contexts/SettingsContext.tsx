@@ -18,6 +18,7 @@ export interface ControlSettings {
   biddingZone: string;
   netFeePerKwh: number;
   electricityProvider: string;
+  usePricesWithTax: boolean;
 }
 
 const defaultSettings: ControlSettings = {
@@ -37,6 +38,7 @@ const defaultSettings: ControlSettings = {
   biddingZone: 'SE3',
   netFeePerKwh: 0.30,
   electricityProvider: 'tibber',
+  usePricesWithTax: true,
 };
 
 interface SettingsContextType {

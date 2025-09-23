@@ -114,8 +114,8 @@ const Dashboard = () => {
       });
 
       if (currentPriceData && automationSettings) {
-        // Calculate complete consumer price including net fee
-        const priceComponents = calculateConsumerPrice(currentPriceData, automationSettings);
+        // Calculate price based on user's tax preference
+        const priceComponents = calculateConsumerPrice(currentPriceData, automationSettings, settings.usePricesWithTax);
         const { average: avgPrice } = calculateRollingAverage(prices, settings.rollingDays);
         const priceState = classifyPrice(priceComponents.total_consumer_price, avgPrice);
         
@@ -466,7 +466,9 @@ const Dashboard = () => {
               {/* Price Breakdown */}
               {data.priceBreakdown && (
                 <div className="p-3 bg-muted/5 rounded-lg border">
-                  <div className="text-xs text-muted-foreground mb-1">Price Breakdown:</div>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Price Breakdown ({settings.usePricesWithTax ? 'Consumer Price' : 'Base Price'}):
+                  </div>
                   <div className="text-sm font-mono">{data.priceBreakdown}</div>
                 </div>
               )}

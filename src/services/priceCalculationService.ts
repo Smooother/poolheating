@@ -13,7 +13,8 @@ export interface PriceComponents {
  */
 export function calculateConsumerPrice(
   priceData: any,
-  settings: AutomationSettings
+  settings: AutomationSettings,
+  usePricesWithTax: boolean = true
 ): PriceComponents {
   const energyPrice = priceData.energy_price ? parseFloat(priceData.energy_price) : null;
   const taxPrice = priceData.tax_price ? parseFloat(priceData.tax_price) : null;
@@ -22,29 +23,40 @@ export function calculateConsumerPrice(
   let totalPrice = 0;
   let source = priceData.source || 'unknown';
   
-  if (priceData.source === 'tibber') {
-    // Tibber provides energy + tax, we add net fee
-    if (energyPrice && taxPrice) {
-      totalPrice = energyPrice + taxPrice + netFee;
+  if (usePricesWithTax) {
+    // Use consumer price (with tax)
+    if (priceData.source === 'tibber') {
+      // Tibber provides energy + tax, we add net fee
+      if (energyPrice && taxPrice) {
+        totalPrice = energyPrice + taxPrice + netFee;
+      } else {
+        // Fallback to stored total price + net fee
+        totalPrice = parseFloat(priceData.price_value) + netFee;
+      }
+    } else if (priceData.source === 'elpriset') {
+      // Elpriset provides base energy price only
+      if (energyPrice) {
+        // We need to estimate tax (typically 25% in Sweden)
+        const estimatedTax = energyPrice * 0.25;
+        totalPrice = energyPrice + estimatedTax + netFee;
+      } else {
+        // Fallback to stored price + estimated tax + net fee
+        const basePrice = parseFloat(priceData.price_value);
+        const estimatedTax = basePrice * 0.25;
+        totalPrice = basePrice + estimatedTax + netFee;
+      }
     } else {
-      // Fallback to stored total price + net fee
-      totalPrice = parseFloat(priceData.price_value) + netFee;
-    }
-  } else if (priceData.source === 'elpriset') {
-    // Elpriset provides base energy price only
-    if (energyPrice) {
-      // We need to estimate tax (typically 25% in Sweden)
-      const estimatedTax = energyPrice * 0.25;
-      totalPrice = energyPrice + estimatedTax + netFee;
-    } else {
-      // Fallback to stored price + estimated tax + net fee
-      const basePrice = parseFloat(priceData.price_value);
-      const estimatedTax = basePrice * 0.25;
-      totalPrice = basePrice + estimatedTax + netFee;
+      // Unknown source, use stored price as-is
+      totalPrice = parseFloat(priceData.price_value);
     }
   } else {
-    // Unknown source, use stored price as-is
-    totalPrice = parseFloat(priceData.price_value);
+    // Use base electricity price (without tax)
+    if (energyPrice) {
+      totalPrice = energyPrice;
+    } else {
+      // Fallback to stored price (assume it's base price)
+      totalPrice = parseFloat(priceData.price_value);
+    }
   }
   
   return {

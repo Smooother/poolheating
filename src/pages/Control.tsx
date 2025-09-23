@@ -504,6 +504,27 @@ const Control = () => {
                   Select your electricity provider for accurate net fee calculation
                 </p>
               </div>
+
+              {/* Price Type Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Price Type</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.usePricesWithTax ? 'Consumer price (with tax)' : 'Base electricity price (without tax)'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.usePricesWithTax}
+                    onCheckedChange={(checked) => handleSettingChange('usePricesWithTax', checked)}
+                    className="data-[state=checked]:bg-success"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <p><strong>With Tax:</strong> What you actually pay (energy + tax + net fee)</p>
+                  <p><strong>Without Tax:</strong> Base electricity price for market analysis</p>
+                </div>
+              </div>
             </div>
           </div>
         </Card>
