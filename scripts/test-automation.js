@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 // Test automation logic with current price data
-const currentPrice = 0.6402; // Current price from API
-const averagePrice = 0.45; // Estimated 7-day average (you can adjust this)
+const currentPrice = 1.12279; // Current price from API (112 öre = 1.12 SEK/kWh)
+const averagePrice = 0.463; // Today's average price (real data from elprisetjustnu.se)
 
 // Current settings
 const highPriceThreshold = 1.50; // Absolute threshold for shutdown
-const lowMultiplier = 0.70; // 70% of average = LOW
-const highMultiplier = 1.30; // 130% of average = HIGH
+const lowMultiplier = 0.80; // 80% of average = LOW (aggressive heating)
+const highMultiplier = 1.30; // 130% of average = HIGH (reduced heating)
 
 function classifyPrice(currentPrice, averagePrice, highPriceThreshold) {
   // Absolute high price threshold - pump shutdown
@@ -16,8 +16,8 @@ function classifyPrice(currentPrice, averagePrice, highPriceThreshold) {
   }
   
   // Relative thresholds based on average
-  const LOW_THRESHOLD = averagePrice * lowMultiplier;   // 30% below average = LOW
-  const HIGH_THRESHOLD = averagePrice * highMultiplier;  // 30% above average = HIGH
+  const LOW_THRESHOLD = averagePrice * lowMultiplier;   // At or below average = LOW
+  const HIGH_THRESHOLD = averagePrice * highMultiplier;  // 60% above average = HIGH
   
   if (currentPrice <= LOW_THRESHOLD) return 'low';
   if (currentPrice >= HIGH_THRESHOLD) return 'high';

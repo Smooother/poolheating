@@ -51,7 +51,9 @@ export default async function handler(req, res) {
 }
 
 async function runAutomation() {
-  // Get automation settings
+  console.log('🔄 Running SIMPLE automation...');
+
+  // 1. Get automation settings
   const { data: settings } = await supabase
     .from('automation_settings')
     .select('*')
@@ -62,15 +64,7 @@ async function runAutomation() {
     return { success: false, message: 'Automation is disabled' };
   }
 
-  // Get current heat pump status
-  const { data: heatPumpStatus } = await supabase
-    .from('heat_pump_status')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  // Get current price data using the configured bidding zone
+  // 2. Get current price
   const now = new Date();
   const { data: currentPrice } = await supabase
     .from('price_data')
@@ -86,180 +80,132 @@ async function runAutomation() {
     return { success: false, message: 'No current price data available' };
   }
 
-  // Get price forecast
-  const forecastStart = new Date(now.getTime() + 3600000);
-  const forecastEnd = new Date(now.getTime() + (settings.optimization_horizon_hours * 3600000));
-  
-  const { data: forecastPrices } = await supabase
-    .from('price_data')
+  // 3. Get 7-day average
+  const averagePrice = await calculatePriceAverage(7, settings.bidding_zone || 'SE3');
+
+  // 4. Get current heat pump status
+  const { data: heatPumpStatus } = await supabase
+    .from('heat_pump_status')
     .select('*')
-    .eq('bidding_zone', settings.bidding_zone || 'SE3')
-    .gte('start_time', forecastStart.toISOString())
-    .lte('start_time', forecastEnd.toISOString())
-    .order('start_time', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
 
-  // Calculate price average for classification
-  const averagePrice = await calculatePriceAverage(settings.average_days || 7, settings.bidding_zone || 'SE3');
+  // 5. SIMPLE CALCULATION - ALWAYS use static user settings as baseline
+  const currentPriceValue = parseFloat(currentPrice.price_value);
+  const staticBaselineTemp = settings.target_pool_temp || 28; // STATIC baseline from user settings
   
-  // Calculate optimal temperature
-  const result = calculateOptimalPumpTemp(
-    parseFloat(currentPrice.price_value),
-    averagePrice,
-    heatPumpStatus?.current_temp || settings.target_pool_temp,
-    settings.target_pool_temp,
-    heatPumpStatus?.target_temp || settings.target_pool_temp,
-    settings
-  );
+  let newTemp = staticBaselineTemp;
+  let reason = '';
 
-  // Execute the automation action
+  if (currentPriceValue >= 1.50) {
+    // SHUTDOWN - turn off pump
+    newTemp = null;
+    reason = `SHUTDOWN: Price ${currentPriceValue.toFixed(3)} SEK/kWh >= 1.50 threshold`;
+  } else if (currentPriceValue >= averagePrice * 1.3) {
+    // HIGH price - reduce by 2°C from STATIC baseline
+    newTemp = Math.max(settings.min_pump_temp || 18, staticBaselineTemp - 2);
+    reason = `HIGH price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - reduced heating -2°C from ${staticBaselineTemp}°C`;
+  } else if (currentPriceValue <= averagePrice * 0.7) {
+    // LOW price - increase by 2°C from STATIC baseline
+    newTemp = Math.min(settings.max_pump_temp || 35, staticBaselineTemp + 2);
+    reason = `LOW price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - aggressive heating +2°C from ${staticBaselineTemp}°C`;
+  } else {
+    // NORMAL price - keep STATIC baseline
+    newTemp = staticBaselineTemp;
+    reason = `NORMAL price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - baseline temperature ${staticBaselineTemp}°C`;
+  }
+
+  // 6. Check if we need to change temperature
+  const currentTemp = heatPumpStatus?.target_temp || staticBaselineTemp;
+  const tempDifference = Math.abs(newTemp - currentTemp);
+
+  if (tempDifference < 0.5) {
+    return {
+      success: true,
+      message: 'No temperature change needed',
+      currentPrice: currentPriceValue,
+      averagePrice: averagePrice,
+      currentTemp: currentTemp,
+      newTemp: newTemp,
+      reason: reason
+    };
+  }
+
+  // 7. Apply temperature change using the working heat pump API
   let actionTaken = '';
-  const priceClassification = classifyPrice(parseFloat(currentPrice.price_value), averagePrice, settings.high_price_threshold || 1.50);
-
-  if (result.shouldShutdown) {
-    // Turn off pump completely
+  
+  if (newTemp === null) {
+    // Turn off pump
     try {
-      // Get Tuya configuration for uid
-      const { data: tuyaConfig } = await supabase
-        .from('tuya_config')
-        .select('uid')
-        .eq('id', 'default')
-        .single();
-
-      const powerResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
+      const response = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': process.env.API_KEY
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'sendCommand',
           commands: [{ code: 'Power', value: false }]
         })
       });
       
-      const powerResult = await powerResponse.json();
-      
-      if (!powerResult.success) {
-        throw new Error(`Failed to turn off pump: ${powerResult.error || 'Unknown error'}`);
+      const result = await response.json();
+      if (result.success) {
+        actionTaken = 'Pump turned OFF';
+      } else {
+        actionTaken = `Failed to turn off pump: ${result.error || 'Unknown error'}`;
       }
-      actionTaken = 'Pump turned OFF due to high price';
     } catch (error) {
-      console.error('Error turning off pump:', error);
       actionTaken = `Failed to turn off pump: ${error.message}`;
     }
   } else {
-    // Set temperature (pump should be on)
+    // Set temperature
     try {
-      // Get Tuya configuration for uid
-      const { data: tuyaConfig } = await supabase
-        .from('tuya_config')
-        .select('uid')
-        .eq('id', 'default')
-        .single();
-
-      // First ensure pump is on
-      const powerOnResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
+      const response = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': process.env.API_KEY
-        },
-        body: JSON.stringify({
-          action: 'sendCommand',
-          commands: [{ code: 'Power', value: true }]
-        })
-      });
-      
-      const powerOnResult = await powerOnResponse.json();
-      
-      if (!powerOnResult.success) {
-        console.warn('Failed to ensure pump is on:', powerOnResult.error || 'Unknown error');
-      }
-
-      // Then set temperature using the heatpump API
-      const tempResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/heatpump`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': process.env.API_KEY
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'setTemperature',
-          temperature: result.newTemp
+          temperature: newTemp
         })
       });
       
-      const tempResult = await tempResponse.json();
-      
-      if (!tempResult.success) {
-        throw new Error(`Failed to set temperature: ${tempResult.error || 'Unknown error'}`);
+      const result = await response.json();
+      if (result.success) {
+        actionTaken = `Temperature set to ${newTemp}°C`;
+      } else {
+        actionTaken = `Failed to set temperature: ${result.error || 'Unknown error'}`;
       }
-      actionTaken = `Temperature set to ${result.newTemp}°C`;
     } catch (error) {
-      console.error('Error setting temperature:', error);
       actionTaken = `Failed to set temperature: ${error.message}`;
     }
   }
 
-  // Log the automation decision
+  // 8. Log the action
   await supabase.from('automation_log').insert({
     user_id: 'default',
-    current_price: parseFloat(currentPrice.price_value),
+    current_price: currentPriceValue,
     avg_price_forecast: averagePrice,
     current_pool_temp: heatPumpStatus?.water_temp || null,
     target_pool_temp: settings.target_pool_temp,
-    current_pump_temp: heatPumpStatus?.target_temp || null,
-    new_pump_temp: result.shouldShutdown ? null : result.newTemp,
-    price_classification: priceClassification,
-    action_reason: `${result.reason} | ${actionTaken}`
+    current_pump_temp: currentTemp,
+    new_pump_temp: newTemp,
+    price_classification: newTemp === null ? 'shutdown' : 
+                         currentPriceValue >= averagePrice * 1.3 ? 'high' :
+                         currentPriceValue <= averagePrice * 0.7 ? 'low' : 'normal',
+    action_reason: `${reason} | ${actionTaken}`
   });
 
   return {
     success: true,
-    currentPrice: parseFloat(currentPrice.price_value),
+    currentPrice: currentPriceValue,
     averagePrice: averagePrice,
-    newTemp: result.shouldShutdown ? null : result.newTemp,
-    shouldShutdown: result.shouldShutdown,
-    reason: result.reason,
-    actionTaken,
-    priceClassification
+    currentTemp: currentTemp,
+    newTemp: newTemp,
+    reason: reason,
+    actionTaken: actionTaken
   };
 }
 
-function calculateOptimalPumpTemp(currentPrice, averagePrice, currentPoolTemp, targetPoolTemp, currentPumpTemp, settings) {
-  // Use current pump temperature as baseline (this is the actual SetTemp from the pump)
-  const baselineTemp = currentPumpTemp || targetPoolTemp;
-  let newTemp = baselineTemp;
-  let shouldShutdown = false;
-  let reason = '';
-
-  // Classify current price
-  const priceClassification = classifyPrice(currentPrice, averagePrice, settings.high_price_threshold || 1.50);
-  
-  if (priceClassification === 'shutdown') {
-    // SHUTDOWN price - turn off pump completely
-    shouldShutdown = true;
-    reason = `SHUTDOWN price (${currentPrice.toFixed(3)} SEK/kWh) - pump turned off (threshold: ${settings.high_price_threshold || 1.50} SEK/kWh)`;
-  } else if (priceClassification === 'low') {
-    // LOW price - add +2°C for aggressive heating
-    newTemp = Math.min(settings.max_pump_temp, baselineTemp + 2);
-    reason = `LOW price (${currentPrice.toFixed(3)} SEK/kWh) - aggressive heating +2°C (avg: ${averagePrice.toFixed(3)})`;
-  } else if (priceClassification === 'high') {
-    // HIGH price - reduce heating by -2°C
-    newTemp = Math.max(settings.min_pump_temp, baselineTemp - 2);
-    reason = `HIGH price (${currentPrice.toFixed(3)} SEK/kWh) - reduced heating -2°C (avg: ${averagePrice.toFixed(3)})`;
-  } else {
-    // NORMAL price - use baseline temperature
-    newTemp = baselineTemp;
-    reason = `NORMAL price (${currentPrice.toFixed(3)} SEK/kWh) - baseline temperature (avg: ${averagePrice.toFixed(3)})`;
-  }
-
-  return {
-    newTemp: Math.round(newTemp),
-    shouldShutdown,
-    reason
-  };
-}
+// Simple calculation is now inline in runAutomation()
 
 async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
   // Calculate average price over the specified number of days
@@ -281,17 +227,4 @@ async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
   return total / priceData.length;
 }
 
-function classifyPrice(currentPrice, averagePrice, highPriceThreshold = 1.50) {
-  // Absolute high price threshold - pump shutdown
-  if (currentPrice >= highPriceThreshold) {
-    return 'shutdown';
-  }
-  
-  // Relative thresholds based on average
-  const LOW_THRESHOLD = averagePrice * 0.7;   // 30% below average = LOW
-  const HIGH_THRESHOLD = averagePrice * 1.3;  // 30% above average = HIGH
-  
-  if (currentPrice <= LOW_THRESHOLD) return 'low';
-  if (currentPrice >= HIGH_THRESHOLD) return 'high';
-  return 'normal';
-}
+// Classification is now inline in runAutomation()
