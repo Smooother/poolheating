@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { useSettings } from "@/contexts/SettingsContext";
+import { Zap, Clock, CheckCircle, XCircle, AlertTriangle, MapPin } from "lucide-react";
 
 interface TibberStatus {
   has_token: boolean;
@@ -28,13 +30,26 @@ export const TibberTest = () => {
   const [status, setStatus] = useState<TibberStatus | null>(null);
   const [priceResult, setPriceResult] = useState<TibberPriceResult | null>(null);
   const { toast } = useToast();
+  const { settings, updateSetting } = useSettings();
 
   const checkStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/tibber-prices');
-      const data = await response.json();
-      setStatus(data);
+      
+      // Mock response for local development
+      const mockStatus: TibberStatus = {
+        has_token: true,
+        price_data_available: true,
+        next_release_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        message: 'Tibber integration ready (mock data)'
+      };
+      
+      setStatus(mockStatus);
+      
+      toast({
+        title: "Tibber Status",
+        description: "Mock status loaded for local development",
+      });
     } catch (error) {
       console.error('Failed to check Tibber status:', error);
       toast({
@@ -50,24 +65,25 @@ export const TibberTest = () => {
   const fetchPrices = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/tibber-prices', {
-        method: 'POST'
-      });
-      const data = await response.json();
-      setPriceResult(data);
       
-      if (data.success) {
-        toast({
-          title: "Prices Fetched Successfully",
-          description: `Retrieved ${data.pricesCount} prices from Tibber`,
-        });
-      } else {
-        toast({
-          title: "Price Fetch Failed",
-          description: data.message,
-          variant: "destructive",
-        });
-      }
+      // Mock response for local development
+      const mockResult: TibberPriceResult = {
+        success: true,
+        pricesCount: 24,
+        message: 'Successfully fetched 24 prices from Tibber (mock data)',
+        prices: [
+          { time: '2025-09-23T20:00:00Z', price: 0.2987, currency: 'SEK' },
+          { time: '2025-09-23T21:00:00Z', price: 0.3124, currency: 'SEK' },
+          { time: '2025-09-23T22:00:00Z', price: 0.2891, currency: 'SEK' },
+        ]
+      };
+      
+      setPriceResult(mockResult);
+      
+      toast({
+        title: "Prices Fetched Successfully",
+        description: `Retrieved ${mockResult.pricesCount} prices from Tibber (mock data)`,
+      });
     } catch (error) {
       console.error('Failed to fetch Tibber prices:', error);
       toast({
@@ -132,6 +148,28 @@ export const TibberTest = () => {
             </div>
           </div>
         )}
+
+        {/* Region Selection */}
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Bidding Zone</span>
+          </div>
+          <Select
+            value={settings.biddingZone}
+            onValueChange={(value) => updateSetting('biddingZone', value)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="SE1">SE1 - Northern Sweden</SelectItem>
+              <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
+              <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
+              <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex space-x-2">
           <Button

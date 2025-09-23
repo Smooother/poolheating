@@ -1,47 +1,53 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import App from "./App";
 import "./index.css";
 import { SettingsProvider } from "./contexts/SettingsContext.tsx";
 
-// Test Tuya connection and start monitoring on startup
-import { tuyaService } from "./services/tuyaService";
-import { triggerPriceCollection } from "./services/priceDataService";
-import { HeatPumpStatusService } from "./services/heatPumpStatusService";
-
-// Test Tuya connection
-tuyaService.testConnection().then((connected) => {
-  if (connected) {
-    console.log('✅ Tuya Cloud connection test successful');
-  } else {
-    console.warn('⚠️ Tuya Cloud connection test failed - check configuration');
+// Simple error boundary
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
   }
-}).catch((error) => {
-  console.error('❌ Tuya Cloud connection test error:', error);
-});
 
-// Automatically collect price data on startup
-triggerPriceCollection().then(() => {
-  console.log('✅ Automatic price data collection started');
-}).catch((error) => {
-  console.error('❌ Automatic price data collection failed:', error);
-});
-
-// Automatically start heat pump monitoring on startup
-HeatPumpStatusService.triggerStatusUpdate().then((success) => {
-  if (success) {
-    console.log('✅ Heat pump monitoring started successfully');
-  } else {
-    console.warn('⚠️ Heat pump monitoring failed to start - check Tuya configuration');
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
   }
-}).catch((error) => {
-  console.error('❌ Heat pump monitoring startup error:', error);
-});
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('❌ ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', backgroundColor: 'red', color: 'white', minHeight: '100vh' }}>
+          <h1>❌ Application Error</h1>
+          <p>Something went wrong. Check the console for details.</p>
+          <details style={{ marginTop: '20px' }}>
+            <summary>Error Details</summary>
+            <pre style={{ marginTop: '10px', padding: '10px', backgroundColor: 'black', color: 'white' }}>
+              {this.state.error?.stack}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SettingsProvider>
-      <App />
-    </SettingsProvider>
+    <ErrorBoundary>
+      <SettingsProvider>
+        <App />
+      </SettingsProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

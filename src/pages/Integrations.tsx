@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { LivePriceTest } from "@/components/integrations/LivePriceTest";
 import { TuyaTest } from "@/components/integrations/TuyaTest";
+import { TibberTest } from "@/components/integrations/TibberTest";
 import { useSettings } from "@/contexts/SettingsContext";
 
 interface IntegrationStatus {
@@ -163,112 +164,18 @@ const Integrations = () => {
         </div>
       </Card>
 
-      <Tabs defaultValue="nordpool" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
-          <TabsTrigger value="nordpool" className="text-sm">Price Data</TabsTrigger>
-          <TabsTrigger value="heatpump" className="text-sm">Heat Pump Control</TabsTrigger>
-        </TabsList>
+             <Tabs defaultValue="tibber" className="space-y-6">
+               <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
+                 <TabsTrigger value="tibber" className="text-sm">Tibber API</TabsTrigger>
+                 <TabsTrigger value="heatpump" className="text-sm">Heat Pump Control</TabsTrigger>
+               </TabsList>
 
-        {/* Price Data Configuration */}
-        <TabsContent value="nordpool" className="space-y-6">
-          <Card className="status-card">
-            <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Zap className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Elpriset Just Nu</h3>
-                    <p className="text-sm text-muted-foreground">Free Swedish electricity prices</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <StatusBadge status={nordPoolStatus} />
-                </div>
-              </div>
+        {/* Elpriset integration hidden but kept as fallback */}
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Bidding Zone</Label>
-                    <Select
-                      value={settings.biddingZone}
-                      disabled={isSyncing}
-                      onValueChange={async (value) => {
-                        updateSetting('biddingZone', value);
-                        setNordPoolConfig(prev => ({ 
-                          ...prev, 
-                          area: value 
-                        }));
-                        
-                        // Sync with backend
-                        try {
-                          await syncWithBackend();
-                          toast({
-                            title: "Bidding Zone Updated",
-                            description: `Changed to ${value}. Automation will now use prices for this zone.`,
-                          });
-                        } catch (error) {
-                          toast({
-                            title: "Sync Failed",
-                            description: "Failed to sync bidding zone with backend. Please try again.",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SE1">SE1 - Northern Sweden</SelectItem>
-                        <SelectItem value="SE2">SE2 - Central Sweden</SelectItem>
-                        <SelectItem value="SE3">SE3 - Southern Sweden</SelectItem>
-                        <SelectItem value="SE4">SE4 - Malmö Area</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Timezone</Label>
-                    <Select
-                      value={nordPoolConfig.timezone}
-                      onValueChange={(value) => setNordPoolConfig(prev => ({ 
-                        ...prev, 
-                        timezone: value 
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Europe/Stockholm">Europe/Stockholm</SelectItem>
-                        <SelectItem value="Europe/Helsinki">Europe/Helsinki</SelectItem>
-                        <SelectItem value="Europe/Oslo">Europe/Oslo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {nordPoolStatus.lastSync && (
-                  <div className="pt-2">
-                    <Label className="text-xs text-muted-foreground">Last Update</Label>
-                    <p className="text-sm">{nordPoolStatus.lastSync.toLocaleString()}</p>
-                  </div>
-                )}
-
-                <div className="flex justify-end space-x-3">
-                  <Button variant="outline" onClick={handleTestNordPool}>
-                    <TestTube className="h-4 w-4 mr-2" />
-                    Test Connection
-                  </Button>
-                </div>
-              </div>
-
-              <LivePriceTest />
-            </div>
-          </Card>
-        </TabsContent>
+               {/* Tibber API Configuration */}
+               <TabsContent value="tibber" className="space-y-6">
+                 <TibberTest />
+               </TabsContent>
 
         {/* Heat Pump Configuration */}
         <TabsContent value="heatpump" className="space-y-6">

@@ -204,9 +204,17 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
         </div>
       </div>
 
-      <div className="h-48 sm:h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
+      <div className="h-48 sm:h-64 w-full" style={{ minHeight: '200px', minWidth: '300px' }}>
+        {loading || chartData.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Clock className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading price data...</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
@@ -290,6 +298,7 @@ export const PriceChart = ({ currentBiddingZone = CONFIG.biddingZone }: PriceCha
             )}
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* Legend */}

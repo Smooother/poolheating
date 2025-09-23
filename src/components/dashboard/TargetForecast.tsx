@@ -245,9 +245,17 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
       </div>
 
       {/* Chart */}
-      <div className="h-48 sm:h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
+      <div className="h-48 sm:h-64 w-full" style={{ minHeight: '200px', minWidth: '300px' }}>
+        {loading || forecastData.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Clock className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading forecast data...</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
+            <LineChart data={forecastData} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
               dataKey="ts" 
@@ -323,6 +331,7 @@ export const TargetForecast = ({ biddingZone }: TargetForecastProps) => {
             />
           </LineChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* Legend and info */}

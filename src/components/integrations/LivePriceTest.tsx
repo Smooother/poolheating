@@ -29,7 +29,7 @@ export const LivePriceTest = () => {
       setData(prev => ({ ...prev, status: 'loading' }));
 
       // Fetch price data from our backend API with bidding zone
-      const response = await fetch(`/api/prices?zone=${settings.biddingZone}`);
+      const response = await fetch(`https://poolheating.vercel.app/api/prices?zone=${settings.biddingZone}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
