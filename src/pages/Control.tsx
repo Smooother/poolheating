@@ -41,26 +41,46 @@ const Control = () => {
   ) => {
     updateSetting(key, value);
     // Recalculate price components when settings change
-    if (currentPriceData && (key === 'netFeePerKwh' || key === 'electricityProvider' || key === 'usePricesWithTax')) {
+    if (currentPriceData && (
+      key === 'netFeePerKwh' || 
+      key === 'electricityProvider' || 
+      key === 'usePricesWithTax' ||
+      key === 'includeTaxes' ||
+      key === 'includeNetFee'
+    )) {
       calculatePriceComponents();
     }
   };
 
-  // Fetch current price data
+  // Fetch current price data from database
   const fetchCurrentPrice = async () => {
     try {
       setLoadingPrice(true);
       const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
-      const response = await fetch(`${baseURL}/api/prices?zone=${settings.biddingZone}&hours=1`);
+      
+      // Get current hour price data with all components
+      const now = new Date();
+      const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+      const startTime = currentHour.toISOString();
+      const endTime = new Date(currentHour.getTime() + 60 * 60 * 1000).toISOString();
+      
+      const response = await fetch(`${baseURL}/api/prices?zone=${settings.biddingZone}&start=${startTime}&end=${endTime}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
-      setCurrentPriceData(data.currentPrice);
       
-      if (data.currentPrice) {
+      // Find the current hour price data
+      const currentPrice = data.prices?.find((p: any) => {
+        const priceTime = new Date(p.start_time);
+        return priceTime.getTime() === currentHour.getTime();
+      });
+      
+      setCurrentPriceData(currentPrice);
+      
+      if (currentPrice) {
         calculatePriceComponents();
       }
     } catch (error) {
@@ -79,12 +99,43 @@ const Control = () => {
   const calculatePriceComponents = () => {
     if (!currentPriceData) return;
 
-    const automationSettings = {
-      net_fee_per_kwh: settings.netFeePerKwh,
-      electricity_provider: settings.electricityProvider,
-    } as any;
+    // Get energy price from database
+    const energyPrice = currentPriceData.energy_price ? parseFloat(currentPriceData.energy_price) : null;
+    const taxPrice = currentPriceData.tax_price ? parseFloat(currentPriceData.tax_price) : null;
+    
+    // Get net fee from dropdown selection
+    const netFee = settings.includeNetFee ? settings.netFeePerKwh : 0;
+    
+    // Calculate total based on switches
+    let totalPrice = 0;
+    if (energyPrice) {
+      totalPrice = energyPrice;
+      
+      // Add tax if enabled and available
+      if (settings.includeTaxes && taxPrice) {
+        totalPrice += taxPrice;
+      } else if (settings.includeTaxes && !taxPrice && currentPriceData.source === 'elpriset') {
+        // Estimate tax for Elpriset (25% of energy price)
+        totalPrice += energyPrice * 0.25;
+      }
+      
+      // Add net fee if enabled
+      if (settings.includeNetFee) {
+        totalPrice += netFee;
+      }
+    } else {
+      // Fallback to stored price value
+      totalPrice = parseFloat(currentPriceData.price_value);
+    }
 
-    const components = calculateConsumerPrice(currentPriceData, automationSettings, settings.usePricesWithTax);
+    const components: PriceComponents = {
+      energy_price: energyPrice,
+      tax_price: settings.includeTaxes ? (taxPrice || (energyPrice ? energyPrice * 0.25 : null)) : null,
+      net_fee: settings.includeNetFee ? netFee : null,
+      total_consumer_price: totalPrice,
+      source: currentPriceData.source || 'unknown'
+    };
+    
     setPriceComponents(components);
   };
 
@@ -400,20 +451,25 @@ const Control = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tax:</span>
-                      <span>{priceComponents.tax_price ? `${(priceComponents.tax_price * 100).toFixed(2)} öre` : 'Estimated'}</span>
+                      <span>
+                        {priceComponents.tax_price ? `${(priceComponents.tax_price * 100).toFixed(2)} öre` : 
+                         settings.includeTaxes ? 'Estimated' : 'Excluded'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Net Fee:</span>
-                      <span>{(priceComponents.net_fee * 100).toFixed(2)} öre</span>
+                      <span className="text-muted-foreground">Net Distribution Fee:</span>
+                      <span>
+                        {settings.includeNetFee ? `${(priceComponents.net_fee * 100).toFixed(2)} öre` : 'Excluded'}
+                      </span>
                     </div>
                     <div className="border-t pt-2 flex justify-between font-medium">
-                      <span>Total Consumer Price:</span>
+                      <span>Total Price:</span>
                       <span>{(priceComponents.total_consumer_price * 100).toFixed(2)} öre/kWh</span>
                     </div>
                   </div>
                   
                   <div className="text-xs text-muted-foreground">
-                    <p>Source: {priceComponents.source} | Type: {settings.usePricesWithTax ? 'Consumer Price' : 'Base Price'}</p>
+                    <p>Source: {priceComponents.source} | Data: {currentPriceData?.start_time ? new Date(currentPriceData.start_time).toLocaleString() : 'Current hour'}</p>
                   </div>
                 </div>
               </div>
@@ -470,26 +526,40 @@ const Control = () => {
                 </p>
               </div>
 
-              {/* Price Type Selection */}
+              {/* Tax Inclusion Switch */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <Label>Price Type</Label>
+                    <Label>Include Taxes</Label>
                     <p className="text-xs text-muted-foreground">
-                      {settings.usePricesWithTax ? 'Consumer price (with tax)' : 'Base electricity price (without tax)'}
+                      Add tax component to total price calculation
                     </p>
                   </div>
                   <Switch
-                    checked={settings.usePricesWithTax}
-                    onCheckedChange={(checked) => handleSettingChange('usePricesWithTax', checked)}
+                    checked={settings.includeTaxes}
+                    onCheckedChange={(checked) => handleSettingChange('includeTaxes', checked)}
                     className="data-[state=checked]:bg-success"
                   />
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  <p><strong>With Tax:</strong> What you actually pay (energy + tax + net fee)</p>
-                  <p><strong>Without Tax:</strong> Base electricity price for market analysis</p>
+              </div>
+
+              {/* Net Distribution Fee Switch */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Include Net Distribution Fee</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Add network transmission fee to total price calculation
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.includeNetFee}
+                    onCheckedChange={(checked) => handleSettingChange('includeNetFee', checked)}
+                    className="data-[state=checked]:bg-success"
+                  />
                 </div>
               </div>
+
 
               {/* Refresh Button */}
               <Button 

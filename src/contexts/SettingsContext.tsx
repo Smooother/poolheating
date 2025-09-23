@@ -13,6 +13,8 @@ export interface ControlSettings {
   netFeePerKwh: number;
   electricityProvider: string;
   usePricesWithTax: boolean;
+  includeTaxes: boolean;
+  includeNetFee: boolean;
 }
 
 const defaultSettings: ControlSettings = {
@@ -27,6 +29,8 @@ const defaultSettings: ControlSettings = {
   netFeePerKwh: 0.30,
   electricityProvider: 'tibber',
   usePricesWithTax: true,
+  includeTaxes: true,
+  includeNetFee: true,
 };
 
 interface SettingsContextType {
