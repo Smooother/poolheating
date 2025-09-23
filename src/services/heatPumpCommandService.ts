@@ -9,52 +9,46 @@ export class HeatPumpCommandService {
   /**
    * Send a command to the heat pump
    */
-  static async sendCommand(commands: HeatPumpCommand[]): Promise<boolean> {
+  static async sendCommand(commands: HeatPumpCommand[]): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      // Get Tuya configuration
-      const { data: config, error: configError } = await supabase
-        .from('tuya_config')
-        .select('device_id, uid')
-        .eq('id', 'default')
-        .single();
-
-      if (configError || !config?.device_id || !config?.uid) {
-        console.error('Tuya configuration error:', configError);
-        throw new Error('Heat pump device not configured properly');
-      }
-
-      // Send command via tuya-proxy
-      const { data, error } = await supabase.functions.invoke('tuya-proxy', {
-        body: { 
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/heatpump`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           action: 'sendCommand',
-          deviceId: config.device_id,
-          uid: config.uid,
           commands
-        }
+        }),
       });
 
-      if (error) {
-        console.error('Failed to send command:', error);
-        throw new Error(`Command failed: ${error.message}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (!data?.success) {
-        console.error('Tuya API error:', data);
-        throw new Error(`Heat pump rejected command: ${data?.error || 'Unknown error'}`);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Command failed');
       }
 
       console.log('Command sent successfully:', data);
-      return true;
+      return { success: true, message: data.message };
     } catch (error) {
       console.error('Error sending heat pump command:', error);
-      throw error;
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
   }
 
   /**
    * Set target temperature
    */
-  static async setTargetTemperature(temperature: number): Promise<boolean> {
+  static async setTemperature(temperature: number): Promise<{ success: boolean; message?: string; error?: string }> {
     return this.sendCommand([
       {
         code: 'SetTemp',
@@ -66,7 +60,7 @@ export class HeatPumpCommandService {
   /**
    * Set heat pump power state
    */
-  static async setPowerState(powerOn: boolean): Promise<boolean> {
+  static async setPowerState(powerOn: boolean): Promise<{ success: boolean; message?: string; error?: string }> {
     return this.sendCommand([
       {
         code: 'Power',

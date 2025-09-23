@@ -17,6 +17,7 @@ import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatus
 import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
 import { AutomationService, AutomationSettings } from "@/services/automationService";
 import { calculateConsumerPrice, getPriceBreakdown } from "@/services/priceCalculationService";
+import { SystemInfoService, SystemInfoData } from "@/services/systemInfoService";
 
 interface DashboardData {
   heatPump: HeatPumpStatus | null;
@@ -42,6 +43,7 @@ const Dashboard = () => {
   const [automationSettings, setAutomationSettings] = useState<AutomationSettings | null>(null);
   const [showCharts, setShowCharts] = useState(false);
   const [targetTemp, setTargetTemp] = useState(28);
+  const [systemInfo, setSystemInfo] = useState<SystemInfoData[]>([]);
   
   // Load automation settings on mount
   useEffect(() => {
@@ -138,7 +140,18 @@ const Dashboard = () => {
   useEffect(() => {
     fetchPriceData();
     fetchHeatPumpStatus();
+    loadSystemInfo();
   }, [settings.biddingZone]);
+
+  // Load system info
+  const loadSystemInfo = async () => {
+    try {
+      const systemInfoData = await SystemInfoService.getSystemInfo();
+      setSystemInfo(systemInfoData);
+    } catch (error) {
+      console.error('Failed to load system info:', error);
+    }
+  };
 
   // Fetch fresh heat pump status
   const fetchHeatPumpStatus = async () => {
@@ -150,9 +163,58 @@ const Dashboard = () => {
           heatPump: status,
           lastUpdate: new Date()
         }));
+        
+        // Update system info with heat pump data
+        await updateSystemInfo(status);
       }
     } catch (error) {
       console.error('Failed to fetch heat pump status:', error);
+    }
+  };
+
+  // Update system info with current data
+  const updateSystemInfo = async (heatPumpStatus?: HeatPumpStatus) => {
+    try {
+      const updates = [
+        {
+          dataPoint: 'heat_pump_power',
+          value: heatPumpStatus?.power_status || 'unknown',
+          unit: 'status',
+          status: heatPumpStatus?.power_status || 'unknown'
+        },
+        {
+          dataPoint: 'heat_pump_water_temp',
+          value: heatPumpStatus?.water_temp?.toString() || '0',
+          unit: '°C',
+          status: heatPumpStatus?.is_online ? 'online' : 'offline'
+        },
+        {
+          dataPoint: 'heat_pump_target_temp',
+          value: heatPumpStatus?.target_temp?.toString() || '0',
+          unit: '°C',
+          status: heatPumpStatus?.is_online ? 'online' : 'offline'
+        },
+        {
+          dataPoint: 'heat_pump_online',
+          value: heatPumpStatus?.is_online?.toString() || 'false',
+          unit: 'status',
+          status: heatPumpStatus?.is_online ? 'online' : 'offline'
+        },
+        {
+          dataPoint: 'automation_enabled',
+          value: data.automation.toString(),
+          unit: 'status',
+          status: data.automation ? 'enabled' : 'disabled'
+        }
+      ];
+
+      await SystemInfoService.updateMultipleDataPoints(updates);
+      
+      // Refresh system info display
+      const systemInfoData = await SystemInfoService.getSystemInfo();
+      setSystemInfo(systemInfoData);
+    } catch (error) {
+      console.error('Failed to update system info:', error);
     }
   };
 
@@ -214,10 +276,7 @@ const Dashboard = () => {
   const togglePower = async () => {
     try {
       const currentPower = data.heatPump?.power_status === 'on';
-      const result = await HeatPumpCommandService.sendCommand([{
-        code: 'Power',
-        value: !currentPower
-      }]);
+      const result = await HeatPumpCommandService.setPowerState(!currentPower);
       
       if (result.success) {
         setData(prev => ({
@@ -227,12 +286,19 @@ const Dashboard = () => {
             power_status: !currentPower ? 'on' : 'off'
           } : null
         }));
+        
+        toast({
+          title: "Power Updated",
+          description: `Heat pump power turned ${!currentPower ? 'on' : 'off'}`,
+        });
+      } else {
+        throw new Error(result.error || 'Power toggle failed');
       }
     } catch (error) {
       console.error('Failed to toggle power:', error);
       toast({
-        title: "Error",
-        description: "Failed to toggle power",
+        title: "Power Toggle Failed",
+        description: error instanceof Error ? error.message : "Failed to change heat pump power state",
         variant: "destructive",
       });
     }
@@ -254,12 +320,14 @@ const Dashboard = () => {
           title: "Temperature Updated",
           description: `Target temperature set to ${targetTemp}°C`,
         });
+      } else {
+        throw new Error(result.error || 'Temperature update failed');
       }
     } catch (error) {
       console.error('Failed to update temperature:', error);
       toast({
-        title: "Error",
-        description: "Failed to update temperature",
+        title: "Temperature Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update temperature",
         variant: "destructive",
       });
     }
@@ -360,7 +428,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20">
                 <div className="flex items-center space-x-3">
                   <Thermometer className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Water Temperature</span>
+                  <span className="text-sm font-medium">Actual Water Temperature</span>
                 </div>
                 <Badge className="bg-primary/10 text-primary">
                   {data.heatPump?.water_temp?.toFixed(1) || '--'}°C
@@ -368,7 +436,7 @@ const Dashboard = () => {
               </div>
 
               <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
-                <span className="text-sm font-medium">Target Temperature</span>
+                <span className="text-sm font-medium">Setting Water Temperature</span>
                 <Badge variant="outline">
                   {data.heatPump?.target_temp || targetTemp}°C
                 </Badge>
@@ -391,7 +459,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
                   <span className="text-sm font-medium">Last Update</span>
                   <Badge variant="outline">
-                    {new Date(data.heatPump.updated_at).toLocaleTimeString()}
+                    {new Date(data.heatPump.updated_at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })}
                   </Badge>
                 </div>
               )}
@@ -527,44 +595,34 @@ const Dashboard = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold">System Information</h3>
-                <p className="text-sm text-muted-foreground">Current system status and settings</p>
+                <p className="text-sm text-muted-foreground">Critical system data points with timestamps</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
-                <span className="text-sm font-medium">Last Update</span>
-                <Badge variant="outline">
-                  {data.lastUpdate.toLocaleTimeString()}
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
-                <span className="text-sm font-medium">Base Setpoint</span>
-                <Badge variant="outline">
-                  {settings.baseSetpoint}°C
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/20">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-4 w-4 text-success" />
-                  <span className="text-sm font-medium">Low Price Boost</span>
+            <div className="space-y-3">
+              {systemInfo.map((info) => (
+                <div key={info.id} className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium capitalize">
+                      {info.data_point.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Last fetched: {new Date(info.last_fetched).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <Badge 
+                      variant="outline"
+                      className={info.status === 'online' || info.status === 'enabled' || info.status === 'on' ? 'bg-success/10 text-success' : ''}
+                    >
+                      {info.value} {info.unit}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      {info.status}
+                    </span>
+                  </div>
                 </div>
-                <Badge className="bg-success/10 text-success">
-                  +{settings.lowPriceOffset}°C
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/20">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-4 w-4 text-destructive rotate-180" />
-                  <span className="text-sm font-medium">High Price Reduction</span>
-                </div>
-                <Badge className="bg-destructive/10 text-destructive">
-                  -{settings.highPriceOffset}°C
-                </Badge>
-              </div>
+              ))}
             </div>
           </div>
         </Card>
