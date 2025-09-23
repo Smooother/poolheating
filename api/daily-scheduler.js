@@ -111,7 +111,8 @@ async function createDailySchedule() {
   const maxPumpTemp = settings.max_pump_temp || 32;
 
   for (const price of priceData) {
-    const priceValue = parseFloat(price.price_value);
+    // Use energy price for comparison (excluding taxes and net fees which are fixed)
+    const priceValue = price.energy_price ? parseFloat(price.energy_price) : parseFloat(price.price_value);
     const hour = new Date(price.start_time).getHours();
     
     let targetTemp = staticBaselineTemp;
@@ -189,12 +190,13 @@ async function createDailySchedule() {
 }
 
 async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
+  // Calculate average ENERGY price over the specified number of days (excluding taxes and net fees)
   const endDate = new Date();
   const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
   
   const { data: priceData } = await supabase
     .from('price_data')
-    .select('price_value')
+    .select('energy_price, price_value')
     .eq('bidding_zone', biddingZone)
     .gte('start_time', startDate.toISOString())
     .lte('start_time', endDate.toISOString());
@@ -203,6 +205,11 @@ async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
     return 0.50; // Default fallback average
   }
   
-  const total = priceData.reduce((sum, p) => sum + parseFloat(p.price_value), 0);
+  // Use energy_price if available, otherwise fallback to price_value
+  const total = priceData.reduce((sum, p) => {
+    const energyPrice = p.energy_price ? parseFloat(p.energy_price) : parseFloat(p.price_value);
+    return sum + energyPrice;
+  }, 0);
+  
   return total / priceData.length;
 }

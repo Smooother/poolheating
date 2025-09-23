@@ -7,6 +7,7 @@ export interface StoredPriceData {
   start_time: string;
   end_time: string;
   price_value: number;
+  energy_price?: number;
   currency: string;
   provider: string;
   resolution: string;
@@ -16,10 +17,13 @@ export interface StoredPriceData {
 
 // Convert stored data to PricePoint format
 export function convertToPricePoint(stored: StoredPriceData): PricePoint {
+  // Use energy_price for average calculations (excluding taxes and net fees which are fixed)
+  const priceValue = stored.energy_price ? parseFloat(stored.energy_price) : parseFloat(stored.price_value);
+  
   return {
     start: new Date(stored.start_time),
     end: new Date(stored.end_time),
-    value: stored.price_value,
+    value: priceValue,
     currency: stored.currency,
     resolution: stored.resolution as 'PT60M' | 'PT15M'
   };
@@ -34,7 +38,7 @@ export async function fetchStoredPrices(
 ): Promise<PricePoint[]> {
   const { data, error } = await supabase
     .from('price_data')
-    .select('*')
+    .select('*, energy_price')
     .eq('bidding_zone', biddingZone)
     .eq('provider', provider)
     .gte('start_time', startDate.toISOString())

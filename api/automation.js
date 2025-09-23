@@ -92,7 +92,8 @@ async function runAutomation() {
     .single();
 
   // 5. CONFIGURABLE CALCULATION - use settings from Control page
-  const currentPriceValue = parseFloat(currentPrice.price_value);
+  // Use energy price for comparison (excluding taxes and net fees which are fixed)
+  const currentPriceValue = currentPrice.energy_price ? parseFloat(currentPrice.energy_price) : parseFloat(currentPrice.price_value);
   const staticBaselineTemp = settings.target_pool_temp || 28; // STATIC baseline from user settings
   
   // Get configurable thresholds and offsets (with defaults)
@@ -224,13 +225,13 @@ async function runAutomation() {
 // Simple calculation is now inline in runAutomation()
 
 async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
-  // Calculate average price over the specified number of days
+  // Calculate average ENERGY price over the specified number of days (excluding taxes and net fees)
   const endDate = new Date();
   const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
   
   const { data: priceData } = await supabase
     .from('price_data')
-    .select('price_value')
+    .select('energy_price, price_value')
     .eq('bidding_zone', biddingZone)
     .gte('start_time', startDate.toISOString())
     .lte('start_time', endDate.toISOString());
@@ -239,7 +240,12 @@ async function calculatePriceAverage(days = 7, biddingZone = 'SE3') {
     return 0.10; // Default fallback average
   }
   
-  const total = priceData.reduce((sum, p) => sum + parseFloat(p.price_value), 0);
+  // Use energy_price if available, otherwise fallback to price_value
+  const total = priceData.reduce((sum, p) => {
+    const energyPrice = p.energy_price ? parseFloat(p.energy_price) : parseFloat(p.price_value);
+    return sum + energyPrice;
+  }, 0);
+  
   return total / priceData.length;
 }
 
