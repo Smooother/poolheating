@@ -23,20 +23,75 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/contexts/SettingsContext";
 import { AutomationService } from "@/services/automationService";
-import { useState } from "react";
+import { calculateConsumerPrice, getPriceBreakdown, PriceComponents } from "@/services/priceCalculationService";
+import { useState, useEffect } from "react";
 
 const Control = () => {
   const { toast } = useToast();
   const { settings, updateSetting, resetToDefaults, saveSettings } = useSettings();
   const [isTestingAutomation, setIsTestingAutomation] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [currentPriceData, setCurrentPriceData] = useState<any>(null);
+  const [priceComponents, setPriceComponents] = useState<PriceComponents | null>(null);
+  const [loadingPrice, setLoadingPrice] = useState(false);
 
   const handleSettingChange = <K extends keyof typeof settings>(
     key: K,
     value: typeof settings[K]
   ) => {
     updateSetting(key, value);
+    // Recalculate price components when settings change
+    if (currentPriceData && (key === 'netFeePerKwh' || key === 'electricityProvider' || key === 'usePricesWithTax')) {
+      calculatePriceComponents();
+    }
   };
+
+  // Fetch current price data
+  const fetchCurrentPrice = async () => {
+    try {
+      setLoadingPrice(true);
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/prices?zone=${settings.biddingZone}&hours=1`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setCurrentPriceData(data.currentPrice);
+      
+      if (data.currentPrice) {
+        calculatePriceComponents();
+      }
+    } catch (error) {
+      console.error('Failed to fetch current price:', error);
+      toast({
+        title: "Price Data Error",
+        description: "Failed to fetch current electricity price",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPrice(false);
+    }
+  };
+
+  // Calculate price components
+  const calculatePriceComponents = () => {
+    if (!currentPriceData) return;
+
+    const automationSettings = {
+      net_fee_per_kwh: settings.netFeePerKwh,
+      electricity_provider: settings.electricityProvider,
+    } as any;
+
+    const components = calculateConsumerPrice(currentPriceData, automationSettings, settings.usePricesWithTax);
+    setPriceComponents(components);
+  };
+
+  // Load current price on component mount and when bidding zone changes
+  useEffect(() => {
+    fetchCurrentPrice();
+  }, [settings.biddingZone]);
 
   const handleSaveSettings = () => {
     saveSettings();
@@ -320,6 +375,56 @@ const Control = () => {
               </div>
             </div>
 
+            {/* Current Price Display */}
+            {loadingPrice ? (
+              <div className="p-4 bg-muted/5 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-muted-foreground">Loading current price...</span>
+                </div>
+              </div>
+            ) : priceComponents ? (
+              <div className="p-4 bg-muted/5 rounded-lg border">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Current Hour Price</span>
+                    <Badge variant="outline" className="text-lg">
+                      {(priceComponents.total_consumer_price * 100).toFixed(2)} öre/kWh
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Energy Price:</span>
+                      <span>{priceComponents.energy_price ? `${(priceComponents.energy_price * 100).toFixed(2)} öre` : 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax:</span>
+                      <span>{priceComponents.tax_price ? `${(priceComponents.tax_price * 100).toFixed(2)} öre` : 'Estimated'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Net Fee:</span>
+                      <span>{(priceComponents.net_fee * 100).toFixed(2)} öre</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between font-medium">
+                      <span>Total Consumer Price:</span>
+                      <span>{(priceComponents.total_consumer_price * 100).toFixed(2)} öre/kWh</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    <p>Source: {priceComponents.source} | Type: {settings.usePricesWithTax ? 'Consumer Price' : 'Base Price'}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-muted/5 rounded-lg border">
+                <div className="text-sm text-muted-foreground text-center">
+                  No current price data available
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
               {/* Net Fee Configuration */}
               <div className="space-y-3">
@@ -385,6 +490,17 @@ const Control = () => {
                   <p><strong>Without Tax:</strong> Base electricity price for market analysis</p>
                 </div>
               </div>
+
+              {/* Refresh Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchCurrentPrice}
+                disabled={loadingPrice}
+                className="w-full"
+              >
+                {loadingPrice ? "Refreshing..." : "Refresh Current Price"}
+              </Button>
             </div>
           </div>
         </Card>
