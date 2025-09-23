@@ -16,11 +16,13 @@ import { CONFIG } from "@/lib/config";
 import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatusService";
 import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
 import { AutomationService, AutomationSettings } from "@/services/automationService";
+import { calculateConsumerPrice, getPriceBreakdown } from "@/services/priceCalculationService";
 
 interface DashboardData {
   heatPump: HeatPumpStatus | null;
   priceState: 'low' | 'normal' | 'high';
   currentPrice: number;
+  priceBreakdown: string;
   automation: boolean;
   lastUpdate: Date;
 }
@@ -32,6 +34,7 @@ const Dashboard = () => {
     heatPump: null,
     priceState: 'normal',
     currentPrice: 0.45,
+    priceBreakdown: '',
     automation: true,
     lastUpdate: new Date(),
   });
@@ -110,14 +113,16 @@ const Dashboard = () => {
         return priceTime.getTime() === currentHour.getTime();
       });
 
-      if (currentPriceData) {
-        const currentPriceValue = parseFloat(currentPriceData.value.toString());
+      if (currentPriceData && automationSettings) {
+        // Calculate complete consumer price including net fee
+        const priceComponents = calculateConsumerPrice(currentPriceData, automationSettings);
         const { average: avgPrice } = calculateRollingAverage(prices, settings.rollingDays);
-        const priceState = classifyPrice(currentPriceValue, avgPrice);
+        const priceState = classifyPrice(priceComponents.total_consumer_price, avgPrice);
         
         setData(prev => ({
           ...prev,
-          currentPrice: currentPriceValue,
+          currentPrice: priceComponents.total_consumer_price,
+          priceBreakdown: getPriceBreakdown(priceComponents),
           priceState: priceState,
           lastUpdate: new Date()
         }));
@@ -457,6 +462,14 @@ const Dashboard = () => {
                   {(data.currentPrice * 100).toFixed(2)} öre/kWh
                 </Badge>
               </div>
+              
+              {/* Price Breakdown */}
+              {data.priceBreakdown && (
+                <div className="p-3 bg-muted/5 rounded-lg border">
+                  <div className="text-xs text-muted-foreground mb-1">Price Breakdown:</div>
+                  <div className="text-sm font-mono">{data.priceBreakdown}</div>
+                </div>
+              )}
               
               <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
                 <span className="text-sm font-medium">Price State</span>

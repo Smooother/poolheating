@@ -10,6 +10,8 @@ export interface AutomationSettings {
   min_pump_temp: number;
   max_pump_temp: number;
   optimization_horizon_hours: number;
+  net_fee_per_kwh: number;
+  electricity_provider: string;
   created_at: string;
   updated_at: string;
 }

@@ -446,6 +446,67 @@ const Control = () => {
           </div>
         </Card>
 
+        {/* Price Configuration */}
+        <Card className="status-card">
+          <div className="p-6 space-y-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-warning/10 rounded-lg">
+                <DollarSign className="h-5 w-5 text-warning" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Price Configuration</h3>
+                <p className="text-sm text-muted-foreground">Configure net fees and price sources</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Net Fee Configuration */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Network Fee</Label>
+                  <Badge variant="outline">{settings.netFeePerKwh || 0.30} SEK/kWh</Badge>
+                </div>
+                <Slider
+                  value={[settings.netFeePerKwh || 0.30]}
+                  onValueChange={([value]) => handleSettingChange('netFeePerKwh', value)}
+                  min={0.10}
+                  max={0.60}
+                  step={0.01}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Network transmission fee (typically 20-60 öre/kWh)
+                </p>
+              </div>
+
+              {/* Provider Selection */}
+              <div className="space-y-2">
+                <Label>Electricity Provider</Label>
+                <Select
+                  value={settings.electricityProvider || 'tibber'}
+                  onValueChange={(value) => handleSettingChange('electricityProvider', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tibber">Tibber (32 öre/kWh)</SelectItem>
+                    <SelectItem value="vattenfall">Vattenfall (25 öre/kWh)</SelectItem>
+                    <SelectItem value="e.on">E.ON (28 öre/kWh)</SelectItem>
+                    <SelectItem value="fortum">Fortum (30 öre/kWh)</SelectItem>
+                    <SelectItem value="ellakraft">Elakraft (26 öre/kWh)</SelectItem>
+                    <SelectItem value="göteborg_energi">Göteborg Energi (29 öre/kWh)</SelectItem>
+                    <SelectItem value="stockholm_exergi">Stockholm Exergi (31 öre/kWh)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select your electricity provider for accurate net fee calculation
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
         {/* Test Automation */}
         <Card className="status-card">
           <div className="p-6 space-y-6">
