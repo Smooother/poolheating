@@ -11,11 +11,11 @@ const ACCESS_SECRET = process.env.TUYA_CLIENT_SECRET;
 
 function verifyTuyaSignature(req, rawBody) {
   // Tuya sends headers: t, sign, sign_method, nonce (and sometimes signature_headers)
-  const t = req.headers.get("t") || "";
-  const sign = (req.headers.get("sign") || "").toUpperCase();
-  const nonce = req.headers.get("nonce") || "";
+  const t = req.headers["t"] || "";
+  const sign = (req.headers["sign"] || "").toUpperCase();
+  const nonce = req.headers["nonce"] || "";
   const method = req.method || "POST";
-  const path = new URL(req.url).pathname;
+  const path = req.url || "/api/tuya-webhook";
 
   const contentHash = crypto.createHash("sha256").update(rawBody).digest("hex");
   const stringToSign = [method, contentHash, "", path].join("\n");
