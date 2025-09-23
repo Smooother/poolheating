@@ -79,6 +79,15 @@ const Dashboard = () => {
     };
   }, []);
 
+  // Set up periodic refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchHeatPumpStatus();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch price data
   const fetchPriceData = async () => {
     try {
@@ -123,7 +132,57 @@ const Dashboard = () => {
   // Load initial data
   useEffect(() => {
     fetchPriceData();
+    fetchHeatPumpStatus();
   }, [settings.biddingZone]);
+
+  // Fetch fresh heat pump status
+  const fetchHeatPumpStatus = async () => {
+    try {
+      const status = await HeatPumpStatusService.getLatestStatus();
+      if (status) {
+        setData(prev => ({
+          ...prev,
+          heatPump: status,
+          lastUpdate: new Date()
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch heat pump status:', error);
+    }
+  };
+
+  // Trigger fresh status update from Tuya
+  const refreshHeatPumpStatus = async () => {
+    try {
+      setLoading(true);
+      const success = await HeatPumpStatusService.triggerStatusUpdate();
+      if (success) {
+        // Wait a moment for the status to be updated, then fetch it
+        setTimeout(async () => {
+          await fetchHeatPumpStatus();
+        }, 2000);
+        toast({
+          title: "Status Updated",
+          description: "Heat pump status refreshed from device",
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to refresh heat pump status",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh heat pump status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh heat pump status",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Toggle automation
   const toggleAutomation = async () => {
@@ -227,17 +286,26 @@ const Dashboard = () => {
         </div>
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-success rounded-full"></div>
-            <span className="text-sm text-muted-foreground">Connected</span>
+            <div className={`w-2 h-2 rounded-full ${
+              data.heatPump?.is_online ? 'bg-success' : 'bg-destructive'
+            }`}></div>
+            <span className="text-sm text-muted-foreground">
+              {data.heatPump?.is_online ? 'Device Online' : 'Device Offline'}
+            </span>
           </div>
           <Button
             variant="outline"
-            onClick={fetchPriceData}
+            onClick={async () => {
+              await Promise.all([
+                fetchPriceData(),
+                refreshHeatPumpStatus()
+              ]);
+            }}
             disabled={loading}
             className="w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Refresh All
           </Button>
         </div>
       </div>
@@ -300,6 +368,28 @@ const Dashboard = () => {
                   {data.heatPump?.target_temp || targetTemp}°C
                 </Badge>
               </div>
+
+              {/* Device Status */}
+              <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                <span className="text-sm font-medium">Device Status</span>
+                <Badge className={`${
+                  data.heatPump?.is_online 
+                    ? 'bg-success/10 text-success' 
+                    : 'bg-destructive/10 text-destructive'
+                }`}>
+                  {data.heatPump?.is_online ? 'Online' : 'Offline'}
+                </Badge>
+              </div>
+
+              {/* Last Communication */}
+              {data.heatPump?.updated_at && (
+                <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                  <span className="text-sm font-medium">Last Update</span>
+                  <Badge variant="outline">
+                    {new Date(data.heatPump.updated_at).toLocaleTimeString()}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
         </Card>
