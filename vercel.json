@@ -1,8 +1,20 @@
 {
+  "functions": {
+    "api/daily-scheduler.js": {
+      "maxDuration": 60
+    },
+    "api/schedule-executor.js": {
+      "maxDuration": 30
+    }
+  },
   "crons": [
     {
-      "path": "/api/daily-setup",
-      "schedule": "0 13 * * *"
+      "path": "/api/daily-scheduler",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/schedule-executor",
+      "schedule": "0 * * * *"
     }
   ]
 }

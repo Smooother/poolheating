@@ -222,27 +222,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleManualRefresh = async () => {
-    try {
-      setLoading(true);
-      await HeatPumpStatusService.triggerStatusUpdate();
-      await fetchHeatPumpStatus();
-      await fetchCurrentPrice();
-      toast({
-        title: "Status Updated",
-        description: "Heat pump status and prices refreshed",
-      });
-    } catch (error) {
-      console.error('Manual refresh failed:', error);
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to update status",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   // Fetch current price data from database (Integration tab keeps it updated)
@@ -358,10 +337,11 @@ const Dashboard = () => {
     // Refresh prices every 30 minutes
     const priceInterval = setInterval(fetchCurrentPrice, 30 * 60 * 1000);
     
-    // Trigger heat pump status updates more frequently (every 1 minute when automation is active)
+    // Status updates are now handled by automated daily scheduling
+    // Dashboard just displays the latest data from database
     const heatPumpInterval = setInterval(() => {
-      HeatPumpStatusService.triggerStatusUpdate();
-    }, data.automation ? 1 * 60 * 1000 : 5 * 60 * 1000); // 1 min if automation active, 5 min if not
+      fetchHeatPumpStatus(); // Just fetch from database, don't trigger API calls
+    }, 60 * 1000); // Check database every minute for updates
     
     // Check data availability every hour if automation is enabled
     const dataCheckInterval = setInterval(async () => {
@@ -514,18 +494,7 @@ const Dashboard = () => {
       {/* Header */}
         <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
-            <div className="flex items-center space-x-3">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleManualRefresh}
-                disabled={loading}
-                className="h-8 w-8 p-0"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
             <p className="text-sm sm:text-base text-muted-foreground">Dynamic heat pump control based on electricity prices</p>
           </div>
           <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-6">
