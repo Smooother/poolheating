@@ -60,7 +60,7 @@ async function createDailySchedule() {
     return { success: false, message: 'Automation is disabled' };
   }
 
-  // 2. First, try to fetch fresh prices from Tibber
+  // 2. First, try to fetch fresh prices from Tibber (including historical data)
   try {
     console.log('🔄 Fetching fresh prices from Tibber...');
     const tibberResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/tibber-prices`, {
@@ -70,7 +70,7 @@ async function createDailySchedule() {
     if (tibberResponse.ok) {
       const tibberResult = await tibberResponse.json();
       if (tibberResult.success) {
-        console.log(`✅ Fetched ${tibberResult.pricesCount} prices from Tibber`);
+        console.log(`✅ Fetched ${tibberResult.pricesCount} prices from Tibber (including historical data)`);
       }
     }
   } catch (error) {

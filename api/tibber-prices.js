@@ -74,6 +74,15 @@ async function fetchTibberPrices() {
                 tax
                 currency
               }
+              range(resolution: HOURLY, last: 720) {
+                nodes {
+                  startsAt
+                  total
+                  energy
+                  tax
+                  currency
+                }
+              }
             }
           }
         }
@@ -101,21 +110,28 @@ async function fetchTibberPrices() {
     
     if (data.data?.viewer?.homes?.[0]?.currentSubscription?.priceInfo) {
       const priceInfo = data.data.viewer.homes[0].currentSubscription.priceInfo;
-      const allPrices = [...priceInfo.today, ...priceInfo.tomorrow];
       
-      // Filter for today and tomorrow only
-      const today = new Date();
-      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      // Get all available prices: today, tomorrow, and historical range
+      const todayPrices = priceInfo.today || [];
+      const tomorrowPrices = priceInfo.tomorrow || [];
+      const historicalPrices = priceInfo.range?.nodes || [];
+      
+      // Combine all prices
+      const allPrices = [...todayPrices, ...tomorrowPrices, ...historicalPrices];
+      
+      // Filter for last 30 days (720 hours) to avoid duplicates and limit data
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
       const relevantPrices = allPrices.filter(price => {
         const priceDate = new Date(price.startsAt);
-        return priceDate >= today && priceDate < tomorrow;
+        return priceDate >= thirtyDaysAgo;
       });
 
       if (relevantPrices.length === 0) {
         return {
           success: false,
-          message: 'No relevant prices found for today/tomorrow'
+          message: 'No relevant prices found in the last 30 days'
         };
       }
 
@@ -156,12 +172,17 @@ async function fetchTibberPrices() {
       return {
         success: true,
         pricesCount: relevantPrices.length,
-        message: `Successfully fetched and stored ${relevantPrices.length} prices from Tibber`,
-        prices: relevantPrices.map(p => ({
+        message: `Successfully fetched and stored ${relevantPrices.length} prices from Tibber (last 30 days)`,
+        prices: relevantPrices.slice(0, 5).map(p => ({ // Show only first 5 for preview
           time: p.startsAt,
           price: p.total,
           currency: p.currency
-        }))
+        })),
+        historicalData: true,
+        dateRange: {
+          from: thirtyDaysAgo.toISOString(),
+          to: new Date().toISOString()
+        }
       };
     }
 

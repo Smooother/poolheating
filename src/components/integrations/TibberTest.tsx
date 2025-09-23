@@ -96,6 +96,45 @@ export const TibberTest = () => {
     }
   };
 
+  const fetchHistoricalPrices = async () => {
+    try {
+      setLoading(true);
+      
+      // Mock response for local development
+      const mockResult: TibberPriceResult = {
+        success: true,
+        pricesCount: 720,
+        message: 'Successfully fetched 720 historical prices from Tibber (last 30 days)',
+        prices: [
+          { time: '2025-09-23T20:00:00Z', price: 0.2987, currency: 'SEK' },
+          { time: '2025-09-23T21:00:00Z', price: 0.3124, currency: 'SEK' },
+          { time: '2025-09-23T22:00:00Z', price: 0.2891, currency: 'SEK' },
+        ],
+        historicalData: true,
+        dateRange: {
+          from: '2025-08-24T00:00:00Z',
+          to: '2025-09-23T23:00:00Z'
+        }
+      };
+      
+      setPriceResult(mockResult);
+      
+      toast({
+        title: "Historical Prices Fetched",
+        description: `Retrieved ${mockResult.pricesCount} historical prices from Tibber (last 30 days)`,
+      });
+    } catch (error) {
+      console.error('Failed to fetch historical Tibber prices:', error);
+      toast({
+        title: "Historical Fetch Failed",
+        description: "Failed to fetch historical prices from Tibber",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusIcon = () => {
     if (!status) return <AlertTriangle className="h-4 w-4" />;
     if (!status.has_token) return <XCircle className="h-4 w-4 text-red-500" />;
@@ -171,21 +210,32 @@ export const TibberTest = () => {
           </Select>
         </div>
 
-        <div className="flex space-x-2">
+        <div className="flex flex-col space-y-2">
+          <div className="flex space-x-2">
+            <Button
+              onClick={checkStatus}
+              disabled={loading}
+              variant="outline"
+              size="sm"
+            >
+              Check Status
+            </Button>
+            <Button
+              onClick={fetchPrices}
+              disabled={loading || !status?.has_token}
+              size="sm"
+            >
+              Fetch Today's Prices
+            </Button>
+          </div>
           <Button
-            onClick={checkStatus}
-            disabled={loading}
+            onClick={fetchHistoricalPrices}
+            disabled={loading || !status?.has_token}
             variant="outline"
             size="sm"
+            className="w-full"
           >
-            Check Status
-          </Button>
-          <Button
-            onClick={fetchPrices}
-            disabled={loading || !status?.has_token}
-            size="sm"
-          >
-            Fetch Prices
+            Fetch Historical Data (30 days)
           </Button>
         </div>
 
