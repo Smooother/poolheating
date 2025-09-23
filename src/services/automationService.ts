@@ -12,6 +12,11 @@ export interface AutomationSettings {
   optimization_horizon_hours: number;
   net_fee_per_kwh: number;
   electricity_provider: string;
+  low_price_threshold: number;
+  high_price_threshold: number;
+  low_temp_offset: number;
+  high_temp_offset: number;
+  rolling_days: number;
   created_at: string;
   updated_at: string;
 }
@@ -223,19 +228,30 @@ export class AutomationService {
   /**
    * Trigger manual automation run
    */
-  static async triggerAutomation(): Promise<boolean> {
+  static async triggerAutomation(): Promise<any> {
     try {
-      const { data, error } = await supabase.functions.invoke('price-automation');
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/automation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) {
-        console.error('Failed to trigger automation:', error);
-        return false;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return data?.success === true;
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Error triggering automation:', error);
-      return false;
+      return {
+        success: false,
+        message: 'Failed to trigger automation',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 

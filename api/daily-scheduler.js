@@ -94,13 +94,22 @@ async function createDailySchedule() {
     return { success: false, message: 'No price data available for today. Tibber prices may not be available yet (released at 13:20).' };
   }
 
-  // 3. Get 7-day average for classification
-  const averagePrice = await calculatePriceAverage(7, settings.bidding_zone || 'SE3');
+  // 3. Get configurable rolling average for classification
+  const rollingDays = settings.rolling_days || 7;
+  const averagePrice = await calculatePriceAverage(rollingDays, settings.bidding_zone || 'SE3');
   const staticBaselineTemp = settings.target_pool_temp || 28;
 
   // 4. Create hourly schedule
   const schedule = [];
   
+  // Get configurable thresholds and offsets
+  const lowPriceThreshold = settings.low_price_threshold || 0.7;
+  const highPriceThreshold = settings.high_price_threshold || 1.3;
+  const lowTempOffset = settings.low_temp_offset || 2.0;
+  const highTempOffset = settings.high_temp_offset || 2.0;
+  const minPumpTemp = settings.min_pump_temp || 18;
+  const maxPumpTemp = settings.max_pump_temp || 32;
+
   for (const price of priceData) {
     const priceValue = parseFloat(price.price_value);
     const hour = new Date(price.start_time).getHours();
@@ -109,21 +118,30 @@ async function createDailySchedule() {
     let classification = 'normal';
     let reason = '';
 
-    if (priceValue >= 1.50) {
-      // SHUTDOWN
+    // Check if temperature would exceed safe limits
+    const proposedLowTemp = staticBaselineTemp + lowTempOffset;
+    const proposedHighTemp = staticBaselineTemp - highTempOffset;
+    
+    if (proposedLowTemp > maxPumpTemp || proposedHighTemp < minPumpTemp) {
+      // SHUTDOWN - temperature would exceed safe limits
+      targetTemp = null;
+      classification = 'shutdown';
+      reason = `SHUTDOWN: Temperature adjustment would exceed safe limits (${minPumpTemp}-${maxPumpTemp}°C)`;
+    } else if (priceValue >= 1.50) {
+      // SHUTDOWN - extremely high price
       targetTemp = null;
       classification = 'shutdown';
       reason = `SHUTDOWN: Price ${priceValue.toFixed(3)} SEK/kWh >= 1.50 threshold`;
-    } else if (priceValue >= averagePrice * 1.3) {
-      // HIGH price - reduce by 2°C
-      targetTemp = Math.max(settings.min_pump_temp || 18, staticBaselineTemp - 2);
+    } else if (priceValue >= averagePrice * highPriceThreshold) {
+      // HIGH price - reduce by configured offset
+      targetTemp = Math.max(minPumpTemp, staticBaselineTemp - highTempOffset);
       classification = 'high';
-      reason = `HIGH price: ${priceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - reduced heating -2°C`;
-    } else if (priceValue <= averagePrice * 0.7) {
-      // LOW price - increase by 2°C
-      targetTemp = Math.min(settings.max_pump_temp || 35, staticBaselineTemp + 2);
+      reason = `HIGH price: ${priceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}, threshold: ${(averagePrice * highPriceThreshold).toFixed(3)}) - reduced heating -${highTempOffset}°C`;
+    } else if (priceValue <= averagePrice * lowPriceThreshold) {
+      // LOW price - increase by configured offset
+      targetTemp = Math.min(maxPumpTemp, staticBaselineTemp + lowTempOffset);
       classification = 'low';
-      reason = `LOW price: ${priceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - aggressive heating +2°C`;
+      reason = `LOW price: ${priceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}, threshold: ${(averagePrice * lowPriceThreshold).toFixed(3)}) - aggressive heating +${lowTempOffset}°C`;
     } else {
       // NORMAL price - baseline
       classification = 'normal';

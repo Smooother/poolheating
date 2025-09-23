@@ -2,18 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { settingsService, AutomationSettings } from '@/services/settingsService';
 
 export interface ControlSettings {
-  baseSetpoint: number;
-  lowPriceOffset: number;
-  highPriceOffset: number;
-  hysteresis: number;
-  antiShortCycle: number;
-  maxChangePerHour: number;
   minTemp: number;
   maxTemp: number;
-  thresholdMethod: 'delta' | 'percentile';
-  deltaPercent: number;
-  percentileLow: number;
-  percentileHigh: number;
+  lowPriceThreshold: number;
+  highPriceThreshold: number;
+  lowTempOffset: number;
+  highTempOffset: number;
   rollingDays: number;
   biddingZone: string;
   netFeePerKwh: number;
@@ -22,18 +16,12 @@ export interface ControlSettings {
 }
 
 const defaultSettings: ControlSettings = {
-  baseSetpoint: 28.0,
-  lowPriceOffset: 2.0,
-  highPriceOffset: 2.0,
-  hysteresis: 0.4,
-  antiShortCycle: 30,
-  maxChangePerHour: 2.0,
-  minTemp: 20.0,
+  minTemp: 18.0,
   maxTemp: 32.0,
-  thresholdMethod: 'delta',
-  deltaPercent: 15,
-  percentileLow: 30,
-  percentileHigh: 70,
+  lowPriceThreshold: 0.7,
+  highPriceThreshold: 1.3,
+  lowTempOffset: 2.0,
+  highTempOffset: 2.0,
   rollingDays: 7,
   biddingZone: 'SE3',
   netFeePerKwh: 0.30,

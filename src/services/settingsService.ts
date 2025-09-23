@@ -7,10 +7,13 @@ export interface AutomationSettings {
   min_pump_temp: number;
   max_pump_temp: number;
   optimization_horizon_hours: number;
-  average_days: number;
+  net_fee_per_kwh: number;
+  electricity_provider: string;
+  low_price_threshold: number;
   high_price_threshold: number;
-  low_price_multiplier: number;
-  high_price_multiplier: number;
+  low_temp_offset: number;
+  high_temp_offset: number;
+  rolling_days: number;
   bidding_zone: string;
   created_at?: string;
   updated_at?: string;

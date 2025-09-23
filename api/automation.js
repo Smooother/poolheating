@@ -91,25 +91,41 @@ async function runAutomation() {
     .limit(1)
     .single();
 
-  // 5. SIMPLE CALCULATION - ALWAYS use static user settings as baseline
+  // 5. CONFIGURABLE CALCULATION - use settings from Control page
   const currentPriceValue = parseFloat(currentPrice.price_value);
   const staticBaselineTemp = settings.target_pool_temp || 28; // STATIC baseline from user settings
+  
+  // Get configurable thresholds and offsets (with defaults)
+  const lowPriceThreshold = settings.low_price_threshold || 0.7;
+  const highPriceThreshold = settings.high_price_threshold || 1.3;
+  const lowTempOffset = settings.low_temp_offset || 2.0;
+  const highTempOffset = settings.high_temp_offset || 2.0;
+  const minPumpTemp = settings.min_pump_temp || 18;
+  const maxPumpTemp = settings.max_pump_temp || 32;
   
   let newTemp = staticBaselineTemp;
   let reason = '';
 
-  if (currentPriceValue >= 1.50) {
-    // SHUTDOWN - turn off pump
+  // Check if temperature would exceed safe limits
+  const proposedLowTemp = staticBaselineTemp + lowTempOffset;
+  const proposedHighTemp = staticBaselineTemp - highTempOffset;
+  
+  if (proposedLowTemp > maxPumpTemp || proposedHighTemp < minPumpTemp) {
+    // SHUTDOWN - temperature would exceed safe limits
+    newTemp = null;
+    reason = `SHUTDOWN: Temperature adjustment would exceed safe limits (${minPumpTemp}-${maxPumpTemp}°C)`;
+  } else if (currentPriceValue >= 1.50) {
+    // SHUTDOWN - extremely high price
     newTemp = null;
     reason = `SHUTDOWN: Price ${currentPriceValue.toFixed(3)} SEK/kWh >= 1.50 threshold`;
-  } else if (currentPriceValue >= averagePrice * 1.3) {
-    // HIGH price - reduce by 2°C from STATIC baseline
-    newTemp = Math.max(settings.min_pump_temp || 18, staticBaselineTemp - 2);
-    reason = `HIGH price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - reduced heating -2°C from ${staticBaselineTemp}°C`;
-  } else if (currentPriceValue <= averagePrice * 0.7) {
-    // LOW price - increase by 2°C from STATIC baseline
-    newTemp = Math.min(settings.max_pump_temp || 35, staticBaselineTemp + 2);
-    reason = `LOW price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}) - aggressive heating +2°C from ${staticBaselineTemp}°C`;
+  } else if (currentPriceValue >= averagePrice * highPriceThreshold) {
+    // HIGH price - reduce by configured offset from STATIC baseline
+    newTemp = Math.max(minPumpTemp, staticBaselineTemp - highTempOffset);
+    reason = `HIGH price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}, threshold: ${(averagePrice * highPriceThreshold).toFixed(3)}) - reduced heating -${highTempOffset}°C from ${staticBaselineTemp}°C`;
+  } else if (currentPriceValue <= averagePrice * lowPriceThreshold) {
+    // LOW price - increase by configured offset from STATIC baseline
+    newTemp = Math.min(maxPumpTemp, staticBaselineTemp + lowTempOffset);
+    reason = `LOW price: ${currentPriceValue.toFixed(3)} SEK/kWh (avg: ${averagePrice.toFixed(3)}, threshold: ${(averagePrice * lowPriceThreshold).toFixed(3)}) - aggressive heating +${lowTempOffset}°C from ${staticBaselineTemp}°C`;
   } else {
     // NORMAL price - keep STATIC baseline
     newTemp = staticBaselineTemp;
