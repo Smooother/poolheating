@@ -120,15 +120,24 @@ async function fetchTibberPrices() {
       }
 
       // Store prices in database
-      const priceData = relevantPrices.map(price => ({
-        bidding_zone: 'SE3', // Default to SE3, can be made configurable
-        start_time: new Date(price.startsAt).toISOString(),
-        price_value: price.total.toString(),
-        currency: price.currency,
-        energy_price: price.energy.toString(),
-        tax_price: price.tax.toString(),
-        source: 'tibber'
-      }));
+      const priceData = relevantPrices.map(price => {
+        const startTime = new Date(price.startsAt);
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour later
+        
+        return {
+          bidding_zone: 'SE3', // Default to SE3, can be made configurable
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          price_value: price.total.toString(),
+          currency: price.currency,
+          energy_price: price.energy.toString(),
+          tax_price: price.tax.toString(),
+          net_fee: null, // Tibber doesn't provide net fee separately
+          source: 'tibber',
+          provider: 'tibber',
+          resolution: 'PT60M'
+        };
+      });
 
       const { error } = await supabase
         .from('price_data')

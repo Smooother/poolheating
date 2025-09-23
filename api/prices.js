@@ -138,7 +138,11 @@ async function fetchElprisetData(zone, date) {
       end: new Date(item.time_end),
       value: item.SEK_per_kWh,
       currency: 'SEK',
-      resolution: 'PT60M'
+      resolution: 'PT60M',
+      energy_price: item.SEK_per_kWh, // Elpriset provides base electricity price
+      tax_price: null, // Not provided by Elpriset
+      net_fee: null, // Not provided by Elpriset
+      source: 'elpriset'
     }));
   } catch (error) {
     console.error(`Error fetching data for ${zone} on ${dateStr}:`, error);
@@ -156,7 +160,11 @@ async function savePriceData(prices, zone) {
     price_value: point.value,
     currency: point.currency,
     provider: 'elpriset',
-    resolution: point.resolution
+    resolution: point.resolution,
+    energy_price: point.energy_price || null,
+    tax_price: point.tax_price || null,
+    net_fee: point.net_fee || null,
+    source: point.source || 'elpriset'
   }));
 
   // Use upsert to handle duplicates
