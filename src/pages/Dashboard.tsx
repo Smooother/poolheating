@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Thermometer, Zap, TrendingUp, Power, Plus, Minus, DollarSign } from "lucide-react";
+import { Thermometer, Zap, TrendingUp, Power, Plus, Minus, DollarSign, RefreshCw } from "lucide-react";
 import { PriceChart } from "@/components/dashboard/PriceChart";
 import { TargetForecast } from "@/components/dashboard/TargetForecast";
 import { useToast } from "@/hooks/use-toast";
@@ -222,6 +222,28 @@ const Dashboard = () => {
     }
   };
 
+  const handleManualRefresh = async () => {
+    try {
+      setLoading(true);
+      await HeatPumpStatusService.triggerStatusUpdate();
+      await fetchHeatPumpStatus();
+      await fetchCurrentPrice();
+      toast({
+        title: "Status Updated",
+        description: "Heat pump status and prices refreshed",
+      });
+    } catch (error) {
+      console.error('Manual refresh failed:', error);
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to update status",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // Fetch current price data from database (Integration tab keeps it updated)
   const fetchCurrentPrice = async () => {
@@ -336,10 +358,10 @@ const Dashboard = () => {
     // Refresh prices every 30 minutes
     const priceInterval = setInterval(fetchCurrentPrice, 30 * 60 * 1000);
     
-    // Trigger heat pump status updates more frequently (every 2 minutes)
+    // Trigger heat pump status updates more frequently (every 1 minute when automation is active)
     const heatPumpInterval = setInterval(() => {
       HeatPumpStatusService.triggerStatusUpdate();
-    }, 2 * 60 * 1000);
+    }, data.automation ? 1 * 60 * 1000 : 5 * 60 * 1000); // 1 min if automation active, 5 min if not
     
     // Check data availability every hour if automation is enabled
     const dataCheckInterval = setInterval(async () => {
@@ -492,7 +514,18 @@ const Dashboard = () => {
       {/* Header */}
         <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
+            <div className="flex items-center space-x-3">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Control</h1>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualRefresh}
+                disabled={loading}
+                className="h-8 w-8 p-0"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
             <p className="text-sm sm:text-base text-muted-foreground">Dynamic heat pump control based on electricity prices</p>
           </div>
           <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-6">
