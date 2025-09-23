@@ -19,7 +19,8 @@ import {
   Clock,
   Shield,
   AlertTriangle,
-  PlayCircle
+  PlayCircle,
+  DollarSign
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/contexts/SettingsContext";

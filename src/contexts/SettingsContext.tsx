@@ -16,6 +16,8 @@ export interface ControlSettings {
   percentileHigh: number;
   rollingDays: number;
   biddingZone: string;
+  netFeePerKwh: number;
+  electricityProvider: string;
 }
 
 const defaultSettings: ControlSettings = {
@@ -33,6 +35,8 @@ const defaultSettings: ControlSettings = {
   percentileHigh: 70,
   rollingDays: 7,
   biddingZone: 'SE3',
+  netFeePerKwh: 0.30,
+  electricityProvider: 'tibber',
 };
 
 interface SettingsContextType {
