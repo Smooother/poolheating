@@ -38,7 +38,8 @@ INSERT INTO public.system_info (data_point, value, unit, status) VALUES
 ('heat_pump_water_temp', '0', '°C', 'unknown'),
 ('heat_pump_target_temp', '0', '°C', 'unknown'),
 ('heat_pump_online', 'false', 'status', 'unknown'),
-('automation_enabled', 'false', 'status', 'unknown');
+('automation_enabled', 'false', 'status', 'unknown'),
+('heat_pump_fan_speed', '0', '%', 'unknown');
 
 -- Add comment to explain the table
 COMMENT ON TABLE public.system_info IS 'Stores critical system data points with timestamps for tracking system status';

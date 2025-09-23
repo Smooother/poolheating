@@ -205,6 +205,12 @@ const Dashboard = () => {
           value: data.automation.toString(),
           unit: 'status',
           status: data.automation ? 'enabled' : 'disabled'
+        },
+        {
+          dataPoint: 'heat_pump_fan_speed',
+          value: heatPumpStatus?.speed_percentage?.toString() || '0',
+          unit: '%',
+          status: heatPumpStatus?.is_online ? 'online' : 'offline'
         }
       ];
 
