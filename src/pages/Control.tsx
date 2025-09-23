@@ -35,11 +35,32 @@ const Control = () => {
   const [priceComponents, setPriceComponents] = useState<PriceComponents | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
 
+  // Provider to net fee mapping
+  const getProviderNetFee = (provider: string): number => {
+    const providerFees: { [key: string]: number } = {
+      'tibber': 0.32,
+      'vattenfall': 0.25,
+      'e.on': 0.28,
+      'fortum': 0.30,
+      'ellakraft': 0.26,
+      'göteborg_energi': 0.29,
+      'stockholm_exergi': 0.31
+    };
+    return providerFees[provider] || 0.30;
+  };
+
   const handleSettingChange = <K extends keyof typeof settings>(
     key: K,
     value: typeof settings[K]
   ) => {
     updateSetting(key, value);
+    
+    // Auto-set net fee when provider changes
+    if (key === 'electricityProvider') {
+      const netFee = getProviderNetFee(value as string);
+      updateSetting('netFeePerKwh', netFee);
+    }
+    
     // Recalculate price components when settings change
     if (currentPriceData && (
       key === 'netFeePerKwh' || 
@@ -103,23 +124,20 @@ const Control = () => {
     const energyPrice = currentPriceData.energy_price ? parseFloat(currentPriceData.energy_price) : null;
     const taxPrice = currentPriceData.tax_price ? parseFloat(currentPriceData.tax_price) : null;
     
-    // Get net fee from dropdown selection
+    // Get net fee from dropdown selection (linked to provider)
     const netFee = settings.includeNetFee ? settings.netFeePerKwh : 0;
     
-    // Calculate total based on switches
+    // Calculate total based on switches - only use actual data from database
     let totalPrice = 0;
     if (energyPrice) {
       totalPrice = energyPrice;
       
-      // Add tax if enabled and available
+      // Add tax if enabled and available in database (no estimation)
       if (settings.includeTaxes && taxPrice) {
         totalPrice += taxPrice;
-      } else if (settings.includeTaxes && !taxPrice && currentPriceData.source === 'elpriset') {
-        // Estimate tax for Elpriset (25% of energy price)
-        totalPrice += energyPrice * 0.25;
       }
       
-      // Add net fee if enabled
+      // Add net fee if enabled (from dropdown selection)
       if (settings.includeNetFee) {
         totalPrice += netFee;
       }
@@ -130,7 +148,7 @@ const Control = () => {
 
     const components: PriceComponents = {
       energy_price: energyPrice,
-      tax_price: settings.includeTaxes ? (taxPrice || (energyPrice ? energyPrice * 0.25 : null)) : null,
+      tax_price: settings.includeTaxes ? taxPrice : null, // Only actual tax from database
       net_fee: settings.includeNetFee ? netFee : null,
       total_consumer_price: totalPrice,
       source: currentPriceData.source || 'unknown'
@@ -437,13 +455,6 @@ const Control = () => {
             ) : priceComponents ? (
               <div className="p-4 bg-muted/5 rounded-lg border">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Current Hour Price</span>
-                    <Badge variant="outline" className="text-lg">
-                      {(priceComponents.total_consumer_price * 100).toFixed(2)} öre/kWh
-                    </Badge>
-                  </div>
-                  
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Energy Price:</span>
@@ -453,7 +464,7 @@ const Control = () => {
                       <span className="text-muted-foreground">Tax:</span>
                       <span>
                         {priceComponents.tax_price ? `${(priceComponents.tax_price * 100).toFixed(2)} öre` : 
-                         settings.includeTaxes ? 'Estimated' : 'Excluded'}
+                         settings.includeTaxes ? 'Not available' : 'Excluded'}
                       </span>
                     </div>
                     <div className="flex justify-between">
