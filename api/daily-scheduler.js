@@ -60,7 +60,24 @@ async function createDailySchedule() {
     return { success: false, message: 'Automation is disabled' };
   }
 
-  // 2. Get today's prices
+  // 2. First, try to fetch fresh prices from Tibber
+  try {
+    console.log('🔄 Fetching fresh prices from Tibber...');
+    const tibberResponse = await fetch(`${process.env.BASE_URL || 'https://poolheating.vercel.app'}/api/tibber-prices`, {
+      method: 'POST'
+    });
+    
+    if (tibberResponse.ok) {
+      const tibberResult = await tibberResponse.json();
+      if (tibberResult.success) {
+        console.log(`✅ Fetched ${tibberResult.pricesCount} prices from Tibber`);
+      }
+    }
+  } catch (error) {
+    console.log('⚠️ Tibber fetch failed, using existing data:', error.message);
+  }
+
+  // 3. Get today's prices (from Tibber or existing data)
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
@@ -74,7 +91,7 @@ async function createDailySchedule() {
     .order('start_time', { ascending: true });
 
   if (!priceData || priceData.length === 0) {
-    return { success: false, message: 'No price data available for today' };
+    return { success: false, message: 'No price data available for today. Tibber prices may not be available yet (released at 13:20).' };
   }
 
   // 3. Get 7-day average for classification
