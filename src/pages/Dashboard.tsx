@@ -93,45 +93,48 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch fresh Tibber data and then get from database
-  const fetchFreshTibberData = async () => {
+  // Check if latest price data is available in database
+  const checkLatestPriceData = async () => {
     try {
-      console.log('🔄 Fetching fresh Tibber data...');
-      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      console.log('🔄 Checking latest price data in database...');
       
-      const response = await fetch(`${baseURL}/api/tibber-prices`, {
-        method: 'POST'
-      });
+      // Check when the last price data was updated
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
       
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          console.log(`✅ Fetched ${result.pricesCount} prices from Tibber`);
-          toast({
-            title: "Prices Updated",
-            description: `Successfully fetched ${result.pricesCount} prices from Tibber`,
-          });
-        } else {
-          console.warn('Tibber fetch failed:', result.message);
-          toast({
-            title: "Tibber Fetch Warning",
-            description: result.message,
-            variant: "destructive",
-          });
-        }
-      } else {
-        console.warn('Tibber API request failed');
+      const { data: latestPrices } = await supabase
+        .from('price_data')
+        .select('start_time, source')
+        .eq('bidding_zone', settings.biddingZone)
+        .gte('start_time', today.toISOString())
+        .lte('start_time', tomorrow.toISOString())
+        .order('start_time', { ascending: false })
+        .limit(1);
+      
+      if (latestPrices && latestPrices.length > 0) {
+        const latestPrice = latestPrices[0];
+        const priceTime = new Date(latestPrice.start_time);
+        const hoursAgo = Math.floor((now.getTime() - priceTime.getTime()) / (1000 * 60 * 60));
+        
+        console.log(`✅ Latest price data found: ${hoursAgo} hours ago from ${latestPrice.source}`);
         toast({
-          title: "Tibber API Error",
-          description: "Failed to fetch fresh prices from Tibber",
+          title: "Price Data Available",
+          description: `Latest data: ${hoursAgo}h ago from ${latestPrice.source}`,
+        });
+      } else {
+        console.warn('No recent price data found in database');
+        toast({
+          title: "No Recent Data",
+          description: "No price data found for today. Cron job may not have run yet.",
           variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Error fetching Tibber data:', error);
+      console.error('Error checking price data:', error);
       toast({
-        title: "Network Error",
-        description: "Failed to connect to Tibber API",
+        title: "Database Error",
+        description: "Failed to check latest price data",
         variant: "destructive",
       });
     }
@@ -192,13 +195,11 @@ const Dashboard = () => {
     }
   };
 
-  // Combined function to fetch fresh data and then display it
+  // Combined function to check latest data and then display it
   const refreshPrices = async () => {
-    await fetchFreshTibberData();
-    // Wait a moment for the database to be updated
-    setTimeout(() => {
-      fetchPriceData();
-    }, 1000);
+    await checkLatestPriceData();
+    // Then refresh the display with current database data
+    fetchPriceData();
   };
 
   // Load initial data
@@ -458,8 +459,8 @@ const Dashboard = () => {
               disabled={loading}
               className="w-full sm:w-auto"
             >
-              <Zap className="h-4 w-4 mr-2" />
-              Refresh Prices
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Check Prices
             </Button>
           </div>
         </div>
