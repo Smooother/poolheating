@@ -18,6 +18,7 @@ import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
 import { AutomationService, AutomationSettings } from "@/services/automationService";
 import { calculateConsumerPrice, getPriceBreakdown } from "@/services/priceCalculationService";
 import { SystemInfoService, SystemInfoData } from "@/services/systemInfoService";
+import PulsarClientService from "@/services/pulsarClientService";
 
 interface DashboardData {
   heatPump: HeatPumpStatus | null;
@@ -44,6 +45,7 @@ const Dashboard = () => {
   const [showCharts, setShowCharts] = useState(false);
   const [targetTemp, setTargetTemp] = useState(28);
   const [systemInfo, setSystemInfo] = useState<SystemInfoData[]>([]);
+  const [pulsarStatus, setPulsarStatus] = useState<any>(null);
   
   // Load automation settings on mount
   useEffect(() => {
@@ -207,6 +209,7 @@ const Dashboard = () => {
     fetchPriceData();
     fetchHeatPumpStatus();
     loadSystemInfo();
+    loadPulsarStatus();
   }, [settings.biddingZone]);
 
   // Load system info
@@ -216,6 +219,78 @@ const Dashboard = () => {
       setSystemInfo(systemInfoData);
     } catch (error) {
       console.error('Failed to load system info:', error);
+    }
+  };
+
+  // Load Pulsar status
+  const loadPulsarStatus = async () => {
+    try {
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/pulsar-manager`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        setPulsarStatus(result);
+      }
+    } catch (error) {
+      console.error('Failed to load Pulsar status:', error);
+    }
+  };
+
+  // Start Pulsar client
+  const startPulsar = async () => {
+    try {
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/pulsar-manager`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setPulsarStatus(result);
+        toast({
+          title: "Pulsar Client",
+          description: result.message,
+          variant: result.success ? "default" : "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Failed to start Pulsar:', error);
+      toast({
+        title: "Pulsar Error",
+        description: "Failed to start Pulsar client",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Stop Pulsar client
+  const stopPulsar = async () => {
+    try {
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      const response = await fetch(`${baseURL}/api/pulsar-manager`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setPulsarStatus(result);
+        toast({
+          title: "Pulsar Client",
+          description: result.message
+        });
+      }
+    } catch (error) {
+      console.error('Failed to stop Pulsar:', error);
+      toast({
+        title: "Pulsar Error",
+        description: "Failed to stop Pulsar client",
+        variant: "destructive"
+      });
     }
   };
 
@@ -663,6 +738,81 @@ const Dashboard = () => {
                   className="p-1 h-8 w-8"
                 >
                   {showCharts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Pulsar Real-time Updates */}
+        <Card className="status-card">
+          <div className="p-6 space-y-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <Zap className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Real-time Updates</h3>
+                <p className="text-sm text-muted-foreground">Tuya Pulsar message queue status</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    pulsarStatus?.status?.isConnected ? 'bg-green-500' : 'bg-red-500'
+                  }`}></div>
+                  <span className="text-sm font-medium">Connection Status</span>
+                </div>
+                <Badge variant={pulsarStatus?.status?.isConnected ? "default" : "destructive"}>
+                  {pulsarStatus?.status?.isConnected ? 'Connected' : 'Disconnected'}
+                </Badge>
+              </div>
+
+              {pulsarStatus?.status && (
+                <>
+                  <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                    <span className="text-sm font-medium">Messages Received</span>
+                    <span className="text-sm text-muted-foreground">{pulsarStatus.status.messageCount}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
+                    <span className="text-sm font-medium">Last Message</span>
+                    <span className="text-sm text-muted-foreground">
+                      {pulsarStatus.status.lastMessage 
+                        ? new Date(pulsarStatus.status.lastMessage).toLocaleTimeString('sv-SE', { 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            hour12: false 
+                          })
+                        : 'Never'
+                      }
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startPulsar}
+                  disabled={pulsarStatus?.status?.isConnected}
+                  className="flex-1"
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Start Pulsar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={stopPulsar}
+                  disabled={!pulsarStatus?.status?.isConnected}
+                  className="flex-1"
+                >
+                  <Power className="h-4 w-4 mr-2" />
+                  Stop Pulsar
                 </Button>
               </div>
             </div>
