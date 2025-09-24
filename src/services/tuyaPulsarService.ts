@@ -1,4 +1,4 @@
-import { createClient } from '@/integrations/supabase/client';
+import { createClient } from '../integrations/supabase/client.js';
 
 const supabase = createClient();
 
