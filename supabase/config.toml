@@ -12,9 +12,6 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://bagcdhlbkicwtepflczr.supabase.co"]
 jwt_expiry = 3600
-inactivity_timeout = 0
-refresh_token_rotation_enabled = true
-persist_session = true
 
 [db]
 port = 54322
@@ -29,5 +26,8 @@ verify_jwt = false
 [functions.heat-pump-monitor]
 verify_jwt = false
 
-[edge-runtime]
-policy = "per-worker"
+[functions.poll-status]
+verify_jwt = false
+
+[functions.status-now]
+verify_jwt = false

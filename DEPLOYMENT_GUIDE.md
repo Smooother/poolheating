@@ -1,183 +1,147 @@
-# Vercel + iOS Deployment Guide
+# Supabase Edge Functions Deployment Guide
 
-## Backend Setup (Vercel)
+## Prerequisites
 
-### 1. Deploy to Vercel
-1. Create a new repository with the API files
-2. Connect your GitHub repository to Vercel
-3. Deploy the project
+1. **Supabase CLI installed** ✅ (Done via Homebrew)
+2. **Supabase project linked** (Need to do manually)
+3. **Environment variables set** (Need to do manually)
 
-### 2. Environment Variables in Vercel
-Add these environment variables in your Vercel dashboard:
-- `SUPABASE_URL`: Your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key (from secrets)
-- `TUYA_CLIENT_ID`: Your Tuya client ID (from secrets)
-- `TUYA_CLIENT_SECRET`: Your Tuya client secret (from secrets)
+## Step-by-Step Deployment
 
-### 3. API Endpoints Available
-- `/api/prices` - Price data management
-- `/api/heatpump` - Heat pump control
-- `/api/automation` - Automation management
+### 1. Login to Supabase CLI
 
-## iOS App Development
-
-### 1. Project Structure
-Create a new iOS project in Xcode with these main components:
-
-```
-iOS App/
-├── Models/
-│   ├── Price.swift
-│   ├── HeatPump.swift
-│   └── Automation.swift
-├── Services/
-│   ├── APIService.swift
-│   └── NetworkManager.swift
-├── Views/
-│   ├── DashboardView.swift
-│   ├── ControlView.swift
-│   └── SettingsView.swift
-└── ViewModels/
-    ├── DashboardViewModel.swift
-    └── ControlViewModel.swift
+```bash
+supabase login
 ```
 
-### 2. Core Models
-```swift
-// Price.swift
-struct Price: Codable, Identifiable {
-    let id: String
-    let biddingZone: String
-    let startTime: String
-    let endTime: String
-    let priceValue: Double
-    let currency: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id, currency
-        case biddingZone = "bidding_zone"
-        case startTime = "start_time"
-        case endTime = "end_time"
-        case priceValue = "price_value"
-    }
-}
+This will open a browser window for authentication. Follow the prompts to login with your Supabase account.
 
-// HeatPump.swift
-struct HeatPumpStatus: Codable {
-    let deviceId: String
-    let currentTemp: Double?
-    let targetTemp: Double?
-    let waterTemp: Double?
-    let powerStatus: String
-    let mode: String?
-    let speedPercentage: Int
-    let isOnline: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
-        case currentTemp = "current_temp"
-        case targetTemp = "target_temp"
-        case waterTemp = "water_temp"
-        case powerStatus = "power_status"
-        case mode
-        case speedPercentage = "speed_percentage"
-        case isOnline = "is_online"
-    }
-}
+### 2. Link to Your Project
+
+```bash
+supabase link --project-ref bagcdhlbkicwtepflczr
 ```
 
-### 3. API Service
-```swift
-// APIService.swift
-class APIService: ObservableObject {
-    private let baseURL = "https://your-domain.vercel.app/api"
-    
-    func fetchCurrentPrice() async throws -> PriceData {
-        let url = URL(string: "\(baseURL)/prices?zone=SE3")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        return try JSONDecoder().decode(PriceData.self, from: data)
-    }
-    
-    func setHeatPumpTemperature(_ temperature: Double) async throws {
-        let url = URL(string: "\(baseURL)/heatpump")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let command = ["action": "setTemperature", "temperature": temperature]
-        request.httpBody = try JSONSerialization.data(withJSONObject: command)
-        
-        let (_, _) = try await URLSession.shared.data(for: request)
-    }
-}
+### 3. Set Environment Variables
+
+Go to: https://supabase.com/dashboard/project/bagcdhlbkicwtepflczr/settings/functions
+
+Add these environment variables:
+
+```bash
+TUYA_BASE_URL=https://openapi.tuyaeu.com
+TUYA_CLIENT_ID=dn98qycejwjndescfprj
+TUYA_CLIENT_SECRET=21c50cb2a91a4491b18025373e742272
+UID=19DZ10YT
+DEVICE_ID=bf65ca8db8b207052feu5u
+SUPABASE_URL=https://bagcdhlbkicwtepflczr.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhZ2NkaGxia2ljd3RlcGZsY3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODA5NjM2OCwiZXhwIjoyMDczNjcyMzY4fQ.bOobKwGFgmyKOUgxYhwXjwzPToXA6IcFQvzQtr1GLJA
+POLL_MINUTES=2
 ```
 
-### 4. SwiftUI Views
-```swift
-// DashboardView.swift
-struct DashboardView: View {
-    @StateObject private var apiService = APIService()
-    @State private var currentPrice: Price?
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            if let price = currentPrice {
-                PriceCardView(price: price)
-            }
-            
-            HeatPumpStatusView()
-        }
-        .task {
-            await loadData()
-        }
-    }
-    
-    private func loadData() async {
-        do {
-            let priceData = try await apiService.fetchCurrentPrice()
-            currentPrice = priceData.currentPrice
-        } catch {
-            // Handle error
-        }
-    }
-}
+### 4. Deploy the Functions
+
+```bash
+# Deploy both functions
+supabase functions deploy poll-status
+supabase functions deploy status-now
+
+# Or deploy all at once
+supabase functions deploy
 ```
 
-## Database (Supabase)
-Keep using the existing Supabase database - no changes needed. The Vercel API handles all database operations.
+### 5. Run Database Migration
 
-## Key Differences from Web App
+Apply the telemetry tables migration:
 
-### 1. No Direct Supabase Client
-iOS app only communicates with Vercel API endpoints, never directly with Supabase.
+```sql
+-- Run this in Supabase SQL Editor or via CLI
+-- File: supabase/migrations/20250125000000_create_telemetry_tables.sql
+```
 
-### 2. Native iOS Components
-- Use `URLSession` instead of fetch()
-- SwiftUI instead of React components
-- CoreData or @State for local state management
+### 6. Set Up Scheduled Function
 
-### 3. Mobile-Specific Features
-- Add push notifications for price alerts
-- Background app refresh for automation
-- Haptic feedback for controls
-- Native iOS design patterns
+In Supabase Dashboard:
 
-### 4. Security Considerations
-- Store API base URL in configuration
-- Implement proper error handling
-- Add authentication if needed
-- Use keychain for sensitive data
+1. Go to **Database** → **Cron**
+2. Click **New Cron Job**
+3. Configure:
+   - **Name**: `poll-tuya-status`
+   - **Schedule**: `*/2 * * * *` (every 2 minutes)
+   - **Function**: `poll-status`
+   - **Method**: `POST`
+   - **Headers**: `Content-Type: application/json`
+   - **Body**: `{}`
 
-## Testing
-1. Test all API endpoints with your Vercel deployment
-2. Verify data persistence in Supabase
-3. Test heat pump commands work correctly
-4. Validate automation triggers properly
+### 7. Test the Setup
+
+```bash
+# Test manual status check
+curl -X POST https://bagcdhlbkicwtepflczr.supabase.co/functions/v1/status-now \
+  -H "Authorization: Bearer YOUR_ANON_KEY" \
+  -H "Content-Type: application/json"
+
+# Test scheduled function manually
+curl -X POST https://bagcdhlbkicwtepflczr.supabase.co/functions/v1/poll-status \
+  -H "Authorization: Bearer YOUR_ANON_KEY" \
+  -H "Content-Type: application/json"
+```
+
+## Alternative: Manual Deployment via Dashboard
+
+If CLI deployment doesn't work, you can deploy manually:
+
+1. **Go to Supabase Dashboard** → **Edge Functions**
+2. **Create New Function**:
+   - Name: `poll-status`
+   - Copy content from `supabase/functions/poll-status/index.ts`
+3. **Create New Function**:
+   - Name: `status-now`
+   - Copy content from `supabase/functions/status-now/index.ts`
+4. **Add environment variables** in function settings
+5. **Deploy each function**
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Access token not provided"**
+   - Run `supabase login` first
+
+2. **"Project not linked"**
+   - Run `supabase link --project-ref bagcdhlbkicwtepflczr`
+
+3. **"Environment variables not found"**
+   - Add them in Supabase Dashboard → Settings → Edge Functions
+
+4. **"Function deployment failed"**
+   - Check function syntax and dependencies
+   - Ensure all imports are correct
+
+### Verification
+
+After deployment, you should see:
+
+- ✅ Functions listed in Supabase Dashboard → Edge Functions
+- ✅ Environment variables configured
+- ✅ Scheduled function running every 2 minutes
+- ✅ Telemetry tables created in database
+- ✅ Real-time updates working
 
 ## Next Steps
-1. Deploy backend to Vercel
-2. Set up environment variables
-3. Create iOS project structure
-4. Implement core API service
-5. Build SwiftUI interfaces
-6. Test integration end-to-end
+
+Once deployed:
+
+1. **Monitor function logs** in Supabase Dashboard
+2. **Check telemetry data** in database tables
+3. **Test real-time updates** in your frontend
+4. **Verify scheduled execution** is working
+
+## Support
+
+If you encounter issues:
+
+1. Check Supabase function logs
+2. Verify environment variables
+3. Test with manual function calls
+4. Check database permissions
