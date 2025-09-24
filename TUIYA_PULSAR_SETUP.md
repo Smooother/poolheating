@@ -64,7 +64,7 @@ The integration automatically maps these Tuya status codes to database fields:
 | `switch_led` | `power_status` | Device power on/off |
 | `temp_set` | `target_temp` | Target temperature setting |
 | `temp_current` | `current_temp` | Current temperature reading |
-| `water_temp` | `water_temp` | Water temperature |
+| `WInTemp` | `water_temp` | Water temperature |
 | `fan_speed` | `speed_percentage` | Fan speed percentage |
 | `online` | `is_online` | Device online status |
 

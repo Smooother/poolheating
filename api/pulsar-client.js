@@ -130,7 +130,7 @@ class TuyaPulsarClient {
         'switch_led': 'power_status',
         'temp_set': 'target_temp',
         'temp_current': 'current_temp',
-        'water_temp': 'water_temp',
+        'WInTemp': 'water_temp',  // Correct Tuya status code for water temperature
         'fan_speed': 'speed_percentage'
       };
 

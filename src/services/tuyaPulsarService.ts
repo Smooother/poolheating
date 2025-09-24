@@ -37,7 +37,7 @@ export class TuyaPulsarService {
     'switch_led': 'powerStatus',
     'temp_set': 'targetTemp',
     'temp_current': 'currentTemp',
-    'water_temp': 'waterTemp',
+    'WInTemp': 'waterTemp',  // Correct Tuya status code for water temperature
     'fan_speed': 'speedPercentage',
     'online': 'isOnline'
   };
@@ -96,7 +96,7 @@ export class TuyaPulsarService {
         case 'temp_current':
           deviceStatus.currentTemp = parseFloat(value);
           break;
-        case 'water_temp':
+        case 'WInTemp':
           deviceStatus.waterTemp = parseFloat(value);
           break;
         case 'fan_speed':
