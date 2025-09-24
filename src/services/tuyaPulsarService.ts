@@ -1,4 +1,10 @@
-import { supabase } from '../integrations/supabase/client.js';
+import { createClient } from '@supabase/supabase-js';
+
+// Create a server-side Supabase client for Pulsar service
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://bagcdhlbkicwtepflczr.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhZ2NkaGxia2ljd3RlcGZsY3pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwOTYzNjgsImV4cCI6MjA3MzY3MjM2OH0.JrQKwkxywib7I8149n7Jg6xhRk5aPDKIv3wBVV0MYyU'
+);
 
 export interface TuyaDeviceMessage {
   dataId: string;
