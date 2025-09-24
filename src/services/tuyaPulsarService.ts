@@ -1,6 +1,4 @@
-import { createClient } from '../integrations/supabase/client.js';
-
-const supabase = createClient();
+import { supabase } from '../integrations/supabase/client.js';
 
 export interface TuyaDeviceMessage {
   dataId: string;
