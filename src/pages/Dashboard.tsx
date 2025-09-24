@@ -119,7 +119,7 @@ const Dashboard = () => {
         // Calculate price based on user's tax preference
         const priceComponents = calculateConsumerPrice(currentPriceData, automationSettings, settings.usePricesWithTax);
         const { average: avgPrice } = calculateRollingAverage(prices, settings.rollingDays);
-        const priceState = classifyPrice(priceComponents.total_consumer_price, avgPrice);
+        const priceState = classifyPrice(priceComponents.total_consumer_price, avgPrice, 'percent', settings);
         
         setData(prev => ({
           ...prev,

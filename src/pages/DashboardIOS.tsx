@@ -104,7 +104,7 @@ const DashboardIOS = () => {
       if (currentPriceData) {
         const currentPriceValue = parseFloat(currentPriceData.value.toString());
         const { average: avgPrice } = calculateRollingAverage(prices, settings.rollingDays);
-        const priceState = classifyPrice(currentPriceValue, avgPrice);
+        const priceState = classifyPrice(currentPriceValue, avgPrice, 'percent', settings);
         
         setData(prev => ({
           ...prev,

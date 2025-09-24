@@ -362,9 +362,10 @@ export function calculateRollingAverage(prices: PricePoint[], days: number): { a
   return { average: sum / recentPrices.length, actualDays };
 }
 
-export function classifyPrice(currentPrice: number, rollingAverage: number, method: 'percent' | 'percentile', config: any): 'low' | 'normal' | 'high' {
+export function classifyPrice(currentPrice: number, rollingAverage: number, method: 'percent' | 'percentile' = 'percent', config: any = {}): 'low' | 'normal' | 'high' {
   if (method === 'percent') {
-    const deltaPercent = config.deltaPercent || 15;
+    // Use config values if available, otherwise use defaults
+    const deltaPercent = config?.deltaPercent || config?.lowPriceThreshold || 15;
     const lowThreshold = rollingAverage * (1 - deltaPercent / 100);
     const highThreshold = rollingAverage * (1 + deltaPercent / 100);
     
