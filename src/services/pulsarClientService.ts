@@ -1,4 +1,4 @@
-import { TuyaPulsarService, TuyaDeviceMessage } from './tuyaPulsarService';
+import { TuyaPulsarService, TuyaDeviceMessage } from './tuyaPulsarService.js';
 
 export interface PulsarConfig {
   url: string;
@@ -129,7 +129,7 @@ export class PulsarClientService {
           value: Math.random() > 0.5,
           '20': Math.random() > 0.5 ? 'true' : 'false'
         }, {
-          code: 'water_temp',
+          code: 'WInTemp',
           t: Date.now(),
           value: (20 + Math.random() * 15).toFixed(1) // Random temp between 20-35°C
         }, {
