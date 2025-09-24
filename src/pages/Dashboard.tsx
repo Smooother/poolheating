@@ -93,7 +93,51 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch price data
+  // Fetch fresh Tibber data and then get from database
+  const fetchFreshTibberData = async () => {
+    try {
+      console.log('🔄 Fetching fresh Tibber data...');
+      const baseURL = import.meta.env.VITE_API_URL || 'https://poolheating.vercel.app';
+      
+      const response = await fetch(`${baseURL}/api/tibber-prices`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          console.log(`✅ Fetched ${result.pricesCount} prices from Tibber`);
+          toast({
+            title: "Prices Updated",
+            description: `Successfully fetched ${result.pricesCount} prices from Tibber`,
+          });
+        } else {
+          console.warn('Tibber fetch failed:', result.message);
+          toast({
+            title: "Tibber Fetch Warning",
+            description: result.message,
+            variant: "destructive",
+          });
+        }
+      } else {
+        console.warn('Tibber API request failed');
+        toast({
+          title: "Tibber API Error",
+          description: "Failed to fetch fresh prices from Tibber",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching Tibber data:', error);
+      toast({
+        title: "Network Error",
+        description: "Failed to connect to Tibber API",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fetch price data from database
   const fetchPriceData = async () => {
     try {
       setLoading(true);
@@ -104,7 +148,12 @@ const Dashboard = () => {
       const prices = await fetchStoredPrices(settings.biddingZone, startDate, endDate);
       
       if (prices.length === 0) {
-        console.warn('No price data available');
+        console.warn('No price data available in database');
+        toast({
+          title: "No Price Data",
+          description: "No price data found. Try refreshing prices from Tibber.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -128,12 +177,28 @@ const Dashboard = () => {
           priceState: priceState,
           lastUpdate: new Date()
         }));
+      } else {
+        console.warn('No current price data or automation settings available');
       }
     } catch (error) {
       console.error('Failed to fetch price data:', error);
+      toast({
+        title: "Price Data Error",
+        description: "Failed to fetch price data from database",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  // Combined function to fetch fresh data and then display it
+  const refreshPrices = async () => {
+    await fetchFreshTibberData();
+    // Wait a moment for the database to be updated
+    setTimeout(() => {
+      fetchPriceData();
+    }, 1000);
   };
 
   // Load initial data
@@ -372,20 +437,31 @@ const Dashboard = () => {
               {data.heatPump?.is_online ? 'Device Online' : 'Device Offline'}
             </span>
           </div>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await Promise.all([
-                fetchPriceData(),
-                refreshHeatPumpStatus()
-              ]);
-            }}
-            disabled={loading}
-            className="w-full sm:w-auto"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh All
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                await Promise.all([
+                  refreshPrices(),
+                  refreshHeatPumpStatus()
+                ]);
+              }}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh All
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={refreshPrices}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Refresh Prices
+            </Button>
+          </div>
         </div>
       </div>
 
