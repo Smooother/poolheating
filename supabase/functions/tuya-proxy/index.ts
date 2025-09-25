@@ -38,11 +38,13 @@ function generateSignature(
   body: string = '',
   accessToken: string = ''
 ): string {
-  // Create content hash (SHA256 of body)
-  const contentHash = createHash('sha256').update(body || '').digest('hex');
+  // Create content hash (SHA256 of body) - use empty string hash if body is empty
+  const contentHash = body 
+    ? createHash('sha256').update(body).digest('hex')
+    : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
   
   // stringToSign = METHOD \n contentHash \n \n pathQuery
-  const signStr = [
+  const stringToSign = [
     method.toUpperCase(),
     contentHash,
     '',
@@ -50,10 +52,10 @@ function generateSignature(
   ].join('\n');
   
   // BUSINESS signature: clientId + access_token + t + nonce + stringToSign
-  const stringToSign = clientId + accessToken + timestamp + nonce + signStr;
+  const signString = clientId + accessToken + timestamp + nonce + stringToSign;
   
   // HMAC-SHA256 (uppercase hex)
-  return createHmac('sha256', secret).update(stringToSign).digest('hex').toUpperCase();
+  return createHmac('sha256', secret).update(signString).digest('hex').toUpperCase();
 }
 
 function generateHeaders(

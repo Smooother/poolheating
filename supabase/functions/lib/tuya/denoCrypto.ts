@@ -46,6 +46,7 @@ export async function hmacSha256(message: string, secret: string): Promise<strin
 
 /**
  * Generate Tuya API signature
+ * Based on official Tuya documentation: https://developer.tuya.com/en/docs/iot/singnature
  */
 export async function generateTuyaSignature(
   params: TuyaSignParams,
@@ -53,11 +54,12 @@ export async function generateTuyaSignature(
 ): Promise<string> {
   const { clientId, accessToken, timestamp, nonce, method, body, pathWithQuery } = params;
   
-  // Create stringToSign
-  const bodyHash = await sha256Hex(body);
-  const stringToSign = [method, bodyHash, '', pathWithQuery].join('\n');
+  // Create stringToSign according to Tuya specification
+  // Format: HTTPMethod\nContent-SHA256\nHeaders\nURL
+  const bodyHash = body ? await sha256Hex(body) : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+  const stringToSign = [method.toUpperCase(), bodyHash, '', pathWithQuery].join('\n');
   
-  // Create sign string
+  // Create sign string - different format for token vs service operations
   const signString = accessToken 
     ? `${clientId}${accessToken}${timestamp}${nonce}${stringToSign}`
     : `${clientId}${timestamp}${nonce}${stringToSign}`;
