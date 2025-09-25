@@ -64,13 +64,25 @@ export default async function handler(req, res) {
 }
 
 async function getTuyaConfig() {
+  // Try to get config from database first
   const { data } = await supabase
     .from('tuya_config')
     .select('*')
     .eq('id', 'default')
     .single();
 
-  return data || {};
+  // If no database config, use environment variables
+  if (!data) {
+    console.log('No database config found, using environment variables');
+    return {
+      client_id: process.env.TUYA_ACCESS_ID || 'dn98qycejwjndescfprj',
+      client_secret: process.env.TUYA_ACCESS_KEY || '21c50cb2a91a4491b18025373e742272',
+      device_id: process.env.TUYA_DEVICE_ID || 'bf65ca8db8b207052feu5u',
+      uid: process.env.TUYA_UID || '19DZ10YT'
+    };
+  }
+
+  return data;
 }
 
 async function getValidToken() {
