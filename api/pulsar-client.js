@@ -1,292 +1,325 @@
-import { createClient } from '@supabase/supabase-js';
+/**
+ * Pulsar Client API endpoint for real-time Tuya device updates
+ * This endpoint manages the Pulsar connection for receiving real-time device notifications
+ */
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const { Client } = require('pulsar-client');
+const CryptoJS = require('crypto-js');
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing required environment variables');
+// Tuya Pulsar configuration
+const PULSAR_CONFIG = {
+  accessId: process.env.TUYA_ACCESS_ID || 'dn98qycejwjndescfprj',
+  accessKey: process.env.TUYA_ACCESS_KEY || '21c50cb2a91a4491b18025373e742272',
+  uid: process.env.TUYA_UID || '19DZ10YT',
+  region: 'eu', // Europe region
+  environment: 'TEST'
+};
+
+// Pulsar service URLs by region
+const PULSAR_SERVICE_URLS = {
+  cn: 'pulsar://mq-cn01-v1.pulsar.tuyacn.com:7285',
+  us: 'pulsar://mq-us01-v1.pulsar.tuyaus.com:7285',
+  eu: 'pulsar://mq-eu01-v1.pulsar.tuyaeu.com:7285',
+  in: 'pulsar://mq-in01-v1.pulsar.tuyain.com:7285'
+};
+
+// Global variables for Pulsar connection
+let pulsarClient = null;
+let consumer = null;
+let connectionStatus = {
+  connected: false,
+  messageCount: 0,
+  lastMessage: null,
+  error: null
+};
+
+/**
+ * Initialize Pulsar connection
+ */
+async function initializePulsar() {
+  try {
+    console.log('🔄 Initializing Tuya Pulsar client...');
+    
+    // Get the Pulsar service URL for the region
+    const serviceUrl = PULSAR_SERVICE_URLS[PULSAR_CONFIG.region];
+    if (!serviceUrl) {
+      throw new Error(`Unsupported region: ${PULSAR_CONFIG.region}`);
+    }
+
+    console.log(`📡 Connecting to Pulsar service: ${serviceUrl}`);
+    
+    // Create Pulsar client
+    pulsarClient = new Client({
+      serviceUrl: serviceUrl,
+      operationTimeoutMs: 30000,
+      connectionTimeoutMs: 10000
+    });
+
+    // Create consumer for the specific UID
+    const topicName = `persistent://iot-${PULSAR_CONFIG.environment.toLowerCase()}/iot-${PULSAR_CONFIG.environment.toLowerCase()}-${PULSAR_CONFIG.uid}`;
+    console.log(`📨 Subscribing to topic: ${topicName}`);
+
+    consumer = await pulsarClient.subscribe({
+      topic: topicName,
+      subscription: `sub-${PULSAR_CONFIG.uid}-${Date.now()}`,
+      subscriptionType: 'Shared',
+      ackTimeoutMs: 10000
+    });
+
+    // Start listening for messages
+    startMessageListener();
+    
+    connectionStatus.connected = true;
+    connectionStatus.error = null;
+    
+    console.log('✅ Pulsar client connected successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to initialize Pulsar client:', error);
+    connectionStatus.error = error.message;
+    connectionStatus.connected = false;
+    return false;
+  }
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Tuya Pulsar Configuration
-const TUIYA_PULSAR_CONFIG = {
-  // EU endpoint for European users
-  url: 'pulsar+ssl://mqe.tuyaeu.com:7285/',
-  accessId: process.env.TUIYA_ACCESS_ID,
-  accessKey: process.env.TUIYA_ACCESS_KEY,
-  // Test environment for development
-  env: process.env.TUIYA_ENV || 'TEST' // TEST or PROD
-};
-
-// Message types we're interested in
-const MESSAGE_TYPES = {
-  DEVICE_STATUS: 'status',
-  DEVICE_ONLINE: 'online',
-  DEVICE_OFFLINE: 'offline',
-  DEVICE_DATA: 'data'
-};
-
-class TuyaPulsarClient {
-  constructor() {
-    this.isConnected = false;
-    this.consumer = null;
-    this.messageHandlers = new Map();
+/**
+ * Start listening for Pulsar messages
+ */
+function startMessageListener() {
+  if (!consumer) {
+    console.error('❌ Consumer not initialized');
+    return;
   }
 
-  /**
-   * Initialize the Pulsar client connection
-   */
-  async connect() {
+  console.log('🔄 Starting message listener...');
+  
+  // Listen for messages
+  consumer.on('message', async (message) => {
     try {
-      console.log('🔄 Connecting to Tuya Pulsar message queue...');
+      console.log('📨 Received Pulsar message');
       
-      // For now, we'll simulate the Pulsar connection
-      // In a real implementation, you would use the Tuya Pulsar SDK
-      this.isConnected = true;
-      console.log('✅ Connected to Tuya Pulsar (simulated)');
+      // Get message data
+      const messageData = message.getData().toString();
+      console.log('Raw message data:', messageData);
       
-      // Start listening for messages
-      await this.startMessageListener();
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to connect to Tuya Pulsar:', error);
-      this.isConnected = false;
-      return false;
-    }
-  }
-
-  /**
-   * Start listening for messages from Tuya devices
-   */
-  async startMessageListener() {
-    console.log('🎧 Starting message listener...');
-    
-    // Simulate receiving messages every 30 seconds for testing
-    // In production, this would be a real Pulsar consumer
-    setInterval(async () => {
-      if (this.isConnected) {
-        await this.simulateDeviceMessage();
+      // Parse and decrypt the message
+      const decryptedMessage = await decryptMessage(messageData);
+      if (decryptedMessage) {
+        await processMessage(decryptedMessage);
       }
-    }, 30000);
-  }
+      
+      // Acknowledge the message
+      consumer.acknowledge(message);
+    } catch (error) {
+      console.error('❌ Error processing message:', error);
+      // Negative acknowledge on error
+      consumer.negativeAcknowledge(message);
+    }
+  });
 
-  /**
-   * Simulate receiving a device message (for testing)
-   * In production, this would be called by the real Pulsar consumer
-   */
-  async simulateDeviceMessage() {
-    const mockMessage = {
-      dataId: `mock-${Date.now()}`,
-      devId: process.env.TUIYA_DEVICE_ID || 'mock-device-id',
-      productKey: 'mock-product-key',
-      status: [{
-        code: 'switch_led',
-        t: Date.now(),
-        value: Math.random() > 0.5, // Random on/off
-        '20': Math.random() > 0.5 ? 'true' : 'false'
-      }]
+  consumer.on('error', (error) => {
+    console.error('❌ Consumer error:', error);
+    connectionStatus.error = error.message;
+    connectionStatus.connected = false;
+  });
+}
+
+/**
+ * Decrypt Tuya message using AES
+ */
+async function decryptMessage(encryptedData) {
+  try {
+    // Parse the message structure
+    const messageVO = JSON.parse(encryptedData);
+    
+    // Extract the encryption key from access key (first 16 characters)
+    const encryptionKey = PULSAR_CONFIG.accessKey.substring(8, 24);
+    
+    // Decrypt the data
+    const decryptedData = CryptoJS.AES.decrypt(messageVO.data, encryptionKey).toString(CryptoJS.enc.Utf8);
+    
+    if (!decryptedData) {
+      console.error('❌ Failed to decrypt message data');
+      return null;
+    }
+    
+    console.log('Decrypted message data:', decryptedData);
+    
+    // Parse the decrypted JSON
+    const deviceMessage = JSON.parse(decryptedData);
+    
+    return deviceMessage;
+  } catch (error) {
+    console.error('❌ Error decrypting message:', error);
+    return null;
+  }
+}
+
+/**
+ * Process incoming device message
+ */
+async function processMessage(message) {
+  try {
+    console.log('📨 Processing device message:', message.deviceId);
+    
+    connectionStatus.messageCount++;
+    connectionStatus.lastMessage = new Date();
+
+    // Map Tuya status codes to our database fields
+    const statusMapping = {
+      'switch_led': 'power_status',
+      'temp_set': 'target_temp',
+      'temp_current': 'current_temp',
+      'WInTemp': 'water_temp',
+      'fan_speed': 'speed_percentage',
+      'online': 'is_online'
     };
 
-    await this.handleDeviceMessage(mockMessage);
-  }
-
-  /**
-   * Handle incoming device messages
-   */
-  async handleDeviceMessage(message) {
-    try {
-      console.log('📨 Received device message:', JSON.stringify(message, null, 2));
-
-      const { devId, status } = message;
-      
-      if (!devId || !status) {
-        console.warn('⚠️ Invalid message format');
-        return;
+    // Process each status update
+    for (const status of message.status) {
+      const dbField = statusMapping[status.code];
+      if (dbField) {
+        await updateDeviceStatus(message.deviceId, status.code, status.value, status.t);
       }
-
-      // Process each status update
-      for (const statusUpdate of status) {
-        await this.processStatusUpdate(devId, statusUpdate);
-      }
-
-    } catch (error) {
-      console.error('❌ Error handling device message:', error);
     }
-  }
 
-  /**
-   * Process individual status updates
-   */
-  async processStatusUpdate(deviceId, statusUpdate) {
-    try {
-      const { code, value, t } = statusUpdate;
-      
-      console.log(`🔄 Processing status update: ${code} = ${value}`);
-
-      // Map Tuya status codes to our database fields
-      const statusMapping = {
-        'switch_led': 'power_status',
-        'temp_set': 'target_temp',
-        'temp_current': 'current_temp',
-        'WInTemp': 'water_temp',  // Correct Tuya status code for water temperature
-        'fan_speed': 'speed_percentage'
-      };
-
-      const dbField = statusMapping[code];
-      if (!dbField) {
-        console.log(`ℹ️ Unknown status code: ${code}`);
-        return;
-      }
-
-      // Update the heat pump status in database
-      await this.updateHeatPumpStatus(deviceId, dbField, value, t);
-
-      // Update system info table
-      await this.updateSystemInfo(deviceId, dbField, value);
-
-    } catch (error) {
-      console.error('❌ Error processing status update:', error);
-    }
-  }
-
-  /**
-   * Update heat pump status in database
-   */
-  async updateHeatPumpStatus(deviceId, field, value, timestamp) {
-    try {
-      const updateData = {
-        [field]: value,
-        last_communication: new Date(timestamp).toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from('heat_pump_status')
-        .upsert({
-          device_id: deviceId,
-          ...updateData
-        }, {
-          onConflict: 'device_id'
-        });
-
-      if (error) {
-        console.error('❌ Failed to update heat pump status:', error);
-      } else {
-        console.log(`✅ Updated heat pump status: ${field} = ${value}`);
-      }
-
-    } catch (error) {
-      console.error('❌ Error updating heat pump status:', error);
-    }
-  }
-
-  /**
-   * Update system info table with latest device data
-   */
-  async updateSystemInfo(deviceId, field, value) {
-    try {
-      const systemInfoMapping = {
-        'power_status': 'heat_pump_power',
-        'water_temp': 'heat_pump_water_temp',
-        'target_temp': 'heat_pump_target_temp',
-        'speed_percentage': 'heat_pump_fan_speed'
-      };
-
-      const systemInfoField = systemInfoMapping[field];
-      if (!systemInfoField) return;
-
-      const { error } = await supabase
-        .from('system_info')
-        .upsert({
-          data_point: systemInfoField,
-          value: value.toString(),
-          unit: field === 'power_status' ? 'status' : 
-                field === 'water_temp' || field === 'target_temp' ? '°C' : 
-                field === 'speed_percentage' ? '%' : 'unknown',
-          status: 'online',
-          last_fetched: new Date().toISOString()
-        }, {
-          onConflict: 'data_point'
-        });
-
-      if (error) {
-        console.error('❌ Failed to update system info:', error);
-      } else {
-        console.log(`✅ Updated system info: ${systemInfoField} = ${value}`);
-      }
-
-    } catch (error) {
-      console.error('❌ Error updating system info:', error);
-    }
-  }
-
-  /**
-   * Disconnect from Pulsar
-   */
-  async disconnect() {
-    try {
-      console.log('🔌 Disconnecting from Tuya Pulsar...');
-      this.isConnected = false;
-      
-      if (this.consumer) {
-        await this.consumer.close();
-        this.consumer = null;
-      }
-      
-      console.log('✅ Disconnected from Tuya Pulsar');
-    } catch (error) {
-      console.error('❌ Error disconnecting from Pulsar:', error);
-    }
+    console.log(`✅ Processed ${message.status.length} status updates`);
+  } catch (error) {
+    console.error('❌ Error processing message:', error);
   }
 }
 
-// Export the client instance
-export const pulsarClient = new TuyaPulsarClient();
+/**
+ * Update device status in database
+ */
+async function updateDeviceStatus(deviceId, code, value, timestamp) {
+  try {
+    // For now, just log the update
+    // In a real implementation, you would update the database here
+    console.log(`✅ Device ${deviceId} - ${code}: ${value} (${new Date(timestamp).toISOString()})`);
+    
+    // TODO: Update Supabase database
+    // const { createClient } = require('@supabase/supabase-js');
+    // const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    // 
+    // // Update telemetry_current table
+    // await supabase.from('telemetry_current').upsert({
+    //   device_id: deviceId,
+    //   code: code,
+    //   value: value,
+    //   updated_at: new Date().toISOString()
+    // }, {
+    //   onConflict: 'device_id,code',
+    //   ignoreDuplicates: false
+    // });
+    // 
+    // // Insert into telemetry_history table
+    // await supabase.from('telemetry_history').insert({
+    //   device_id: deviceId,
+    //   code: code,
+    //   value: value,
+    //   ts: timestamp
+    // });
+    
+  } catch (error) {
+    console.error('❌ Error updating device status:', error);
+  }
+}
 
-// API endpoint to start/stop the Pulsar client
+/**
+ * Disconnect from Pulsar
+ */
+async function disconnectPulsar() {
+  try {
+    console.log('🔄 Disconnecting from Pulsar...');
+    
+    if (consumer) {
+      await consumer.close();
+      consumer = null;
+    }
+    
+    if (pulsarClient) {
+      await pulsarClient.close();
+      pulsarClient = null;
+    }
+    
+    connectionStatus.connected = false;
+    console.log('✅ Disconnected from Pulsar');
+  } catch (error) {
+    console.error('❌ Error disconnecting from Pulsar:', error);
+  }
+}
+
+/**
+ * Get connection status
+ */
+function getStatus() {
+  return { ...connectionStatus };
+}
+
+// API handler
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    try {
-      const { action } = req.body;
-      
-      if (action === 'start') {
-        const connected = await pulsarClient.connect();
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  try {
+    const { action } = req.body || {};
+
+    switch (action) {
+      case 'start':
+        const startResult = await initializePulsar();
         return res.status(200).json({
-          success: connected,
-          message: connected ? 'Pulsar client started successfully' : 'Failed to start Pulsar client'
+          success: startResult,
+          message: startResult ? 'Pulsar connection started successfully' : 'Failed to start Pulsar connection',
+          status: getStatus()
         });
-      } else if (action === 'stop') {
-        await pulsarClient.disconnect();
+
+      case 'stop':
+        await disconnectPulsar();
         return res.status(200).json({
           success: true,
-          message: 'Pulsar client stopped successfully'
+          message: 'Pulsar connection stopped successfully',
+          status: getStatus()
         });
-      } else if (action === 'status') {
+
+      case 'status':
         return res.status(200).json({
           success: true,
-          connected: pulsarClient.isConnected,
-          message: pulsarClient.isConnected ? 'Pulsar client is connected' : 'Pulsar client is disconnected'
+          status: getStatus(),
+          timestamp: new Date().toISOString()
         });
-      } else {
+
+      case 'health':
+        return res.status(200).json({
+          success: true,
+          health: {
+            running: connectionStatus.connected,
+            connected: connectionStatus.connected,
+            messageCount: connectionStatus.messageCount,
+            lastMessage: connectionStatus.lastMessage,
+            error: connectionStatus.error
+          },
+          timestamp: new Date().toISOString()
+        });
+
+      default:
         return res.status(400).json({
           success: false,
-          message: 'Invalid action. Use: start, stop, or status'
+          error: 'Invalid action. Use: start, stop, status, or health'
         });
-      }
-    } catch (error) {
-      console.error('❌ Pulsar client API error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: error.message
-      });
     }
-  } else {
-    return res.status(405).json({
+  } catch (error) {
+    console.error('❌ Pulsar client error:', error);
+    return res.status(500).json({
       success: false,
-      message: 'Method not allowed. Use POST.'
+      error: error.message || 'Internal server error'
     });
   }
 }

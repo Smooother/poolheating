@@ -3,7 +3,8 @@
  * This endpoint provides control over the Pulsar client service
  */
 
-import { pulsarClientService } from '../src/services/pulsarClientService.js';
+// Note: We can't import TypeScript modules directly in a .js file
+// We'll need to use a different approach or compile the TypeScript first
 
 export default async function handler(req, res) {
   // Set CORS headers

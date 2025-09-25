@@ -4,6 +4,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { Client, Consumer, Message } from 'pulsar-client';
+import * as CryptoJS from 'crypto-js';
 
 // Tuya Pulsar SDK types
 interface TuyaPulsarConfig {
@@ -12,6 +14,23 @@ interface TuyaPulsarConfig {
   uid: string;
   region: string;
   environment: 'TEST' | 'PROD';
+}
+
+// Tuya Pulsar service URLs by region
+const PULSAR_SERVICE_URLS = {
+  cn: 'pulsar://mq-cn01-v1.pulsar.tuyacn.com:7285',
+  us: 'pulsar://mq-us01-v1.pulsar.tuyaus.com:7285',
+  eu: 'pulsar://mq-eu01-v1.pulsar.tuyaeu.com:7285',
+  in: 'pulsar://mq-in01-v1.pulsar.tuyain.com:7285'
+};
+
+// Tuya message structure
+interface TuyaMessageVO {
+  protocol: number;
+  pv: string;
+  sign: string;
+  t: number;
+  data: string;
 }
 
 interface TuyaDeviceMessage {
@@ -40,11 +59,12 @@ class TuyaPulsarService {
     connected: false,
     messageCount: 0
   };
-  private pulsarClient: any = null;
-  private consumer: any = null;
+  private pulsarClient: Client | null = null;
+  private consumer: Consumer | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 5000; // 5 seconds
+  private isConnecting = false;
 
   constructor() {
     this.config = {
@@ -66,89 +86,133 @@ class TuyaPulsarService {
    * Initialize the Pulsar client
    */
   async initialize(): Promise<boolean> {
+    if (this.isConnecting) {
+      console.log('🔄 Pulsar client is already connecting...');
+      return false;
+    }
+
     try {
+      this.isConnecting = true;
       console.log('🔄 Initializing Tuya Pulsar client...');
       
-      // For now, we'll simulate the Pulsar connection
-      // In a real implementation, you would use the actual Tuya Pulsar SDK
-      await this.simulatePulsarConnection();
+      // Get the Pulsar service URL for the region
+      const serviceUrl = PULSAR_SERVICE_URLS[this.config.region as keyof typeof PULSAR_SERVICE_URLS];
+      if (!serviceUrl) {
+        throw new Error(`Unsupported region: ${this.config.region}`);
+      }
+
+      console.log(`📡 Connecting to Pulsar service: ${serviceUrl}`);
       
+      // Create Pulsar client
+      this.pulsarClient = new Client({
+        serviceUrl: serviceUrl,
+        operationTimeoutMs: 30000,
+        connectionTimeoutMs: 10000
+      });
+
+      // Create consumer for the specific UID
+      const topicName = `persistent://iot-${this.config.environment.toLowerCase()}/iot-${this.config.environment.toLowerCase()}-${this.config.uid}`;
+      console.log(`📨 Subscribing to topic: ${topicName}`);
+
+      this.consumer = await this.pulsarClient.subscribe({
+        topic: topicName,
+        subscription: `sub-${this.config.uid}-${Date.now()}`,
+        subscriptionType: 'Shared',
+        ackTimeoutMs: 10000
+      });
+
+      // Start listening for messages
+      this.startMessageListener();
+      
+      this.connectionStatus.connected = true;
+      this.connectionStatus.error = undefined;
+      this.reconnectAttempts = 0;
+      this.isConnecting = false;
+      
+      console.log('✅ Pulsar client connected successfully');
       return true;
     } catch (error) {
+      this.isConnecting = false;
       console.error('❌ Failed to initialize Pulsar client:', error);
       this.connectionStatus.error = error instanceof Error ? error.message : 'Unknown error';
+      this.connectionStatus.connected = false;
       return false;
     }
   }
 
   /**
-   * Simulate Pulsar connection (placeholder for real implementation)
+   * Start listening for real Pulsar messages
    */
-  private async simulatePulsarConnection(): Promise<void> {
-    console.log('📡 Simulating Pulsar connection...');
+  private startMessageListener(): void {
+    if (!this.consumer) {
+      console.error('❌ Consumer not initialized');
+      return;
+    }
+
+    console.log('🔄 Starting message listener...');
     
-    // Simulate connection delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    this.connectionStatus.connected = true;
-    this.connectionStatus.error = undefined;
-    this.reconnectAttempts = 0;
-    
-    console.log('✅ Pulsar connection simulated successfully');
-    
-    // Start simulating messages
-    this.startMessageSimulation();
+    // Listen for messages
+    this.consumer.on('message', async (message: Message) => {
+      try {
+        console.log('📨 Received Pulsar message');
+        
+        // Get message data
+        const messageData = message.getData().toString();
+        console.log('Raw message data:', messageData);
+        
+        // Parse and decrypt the message
+        const decryptedMessage = await this.decryptMessage(messageData);
+        if (decryptedMessage) {
+          await this.processMessage(decryptedMessage);
+        }
+        
+        // Acknowledge the message
+        this.consumer?.acknowledge(message);
+      } catch (error) {
+        console.error('❌ Error processing message:', error);
+        // Negative acknowledge on error
+        this.consumer?.negativeAcknowledge(message);
+      }
+    });
+
+    this.consumer.on('error', (error: Error) => {
+      console.error('❌ Consumer error:', error);
+      this.connectionStatus.error = error.message;
+      this.connectionStatus.connected = false;
+      
+      // Attempt reconnection
+      this.reconnect();
+    });
   }
 
   /**
-   * Start simulating device messages (placeholder for real message consumption)
+   * Decrypt Tuya message using AES
    */
-  private startMessageSimulation(): void {
-    console.log('🔄 Starting message simulation...');
-    
-    // Simulate receiving messages every 30 seconds
-    setInterval(() => {
-      this.simulateMessage();
-    }, 30000);
-  }
-
-  /**
-   * Simulate a device message (placeholder for real message processing)
-   */
-  private async simulateMessage(): Promise<void> {
+  private async decryptMessage(encryptedData: string): Promise<TuyaDeviceMessage | null> {
     try {
-      const mockMessage: TuyaDeviceMessage = {
-        deviceId: 'bf65ca8db8b207052feu5u',
-        productId: 'mock-product-id',
-        status: [
-          {
-            code: 'switch_led',
-            t: Date.now(),
-            value: Math.random() > 0.5,
-            '20': Math.random() > 0.5 ? 'true' : 'false'
-          },
-          {
-            code: 'WInTemp',
-            t: Date.now(),
-            value: (20 + Math.random() * 15).toFixed(1) // Random temp between 20-35°C
-          },
-          {
-            code: 'temp_set',
-            t: Date.now(),
-            value: (25 + Math.random() * 5).toFixed(1) // Random target between 25-30°C
-          },
-          {
-            code: 'fan_speed',
-            t: Date.now(),
-            value: Math.floor(Math.random() * 100) // Random fan speed 0-100%
-          }
-        ],
-        ts: Date.now()
-      };
-
-      await this.processMessage(mockMessage);
+      // Parse the message structure
+      const messageVO: TuyaMessageVO = JSON.parse(encryptedData);
+      
+      // Extract the encryption key from access key (first 16 characters)
+      const encryptionKey = this.config.accessKey.substring(8, 24);
+      
+      // Decrypt the data
+      const decryptedData = CryptoJS.AES.decrypt(messageVO.data, encryptionKey).toString(CryptoJS.enc.Utf8);
+      
+      if (!decryptedData) {
+        console.error('❌ Failed to decrypt message data');
+        return null;
+      }
+      
+      console.log('Decrypted message data:', decryptedData);
+      
+      // Parse the decrypted JSON
+      const deviceMessage: TuyaDeviceMessage = JSON.parse(decryptedData);
+      
+      return deviceMessage;
     } catch (error) {
-      console.error('❌ Error simulating message:', error);
+      console.error('❌ Error decrypting message:', error);
+      return null;
     }
   }
 
@@ -255,6 +319,7 @@ class TuyaPulsarService {
       }
       
       this.connectionStatus.connected = false;
+      this.isConnecting = false;
       console.log('✅ Disconnected from Pulsar');
     } catch (error) {
       console.error('❌ Error disconnecting from Pulsar:', error);
