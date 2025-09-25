@@ -77,12 +77,12 @@ function mapTuyaDataToHeatPumpStatus(tuyaData: TuyaDeviceData, deviceId: string)
     statusArray = tuyaData.status;
   } else {
     console.error('No valid status array found in Tuya data:', tuyaData);
-    // Return default values when no data is available
+    // Return realistic default values when no data is available
     return {
       device_id: deviceId,
-      current_temp: 20.0,
-      water_temp: 18.0,
-      target_temp: 22.0,
+      current_temp: 26.0,
+      water_temp: 25.0,
+      target_temp: 28.0,
       speed_percentage: 0,
       power_status: 'off',
       mode: 'auto',
