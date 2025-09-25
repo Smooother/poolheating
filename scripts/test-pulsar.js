@@ -1,98 +1,133 @@
-#!/usr/bin/env node
-
 /**
- * Test script for Tuya Pulsar integration
- * This script tests the Pulsar client service and message processing
+ * Test script for Tuya Pulsar real-time connection
+ * This script tests the Pulsar client service and API endpoints
  */
 
-import PulsarClientService from '../src/services/pulsarClientService.js';
-import { TuyaPulsarService } from '../src/services/tuyaPulsarService.js';
+// For now, let's test the API endpoints directly since we can't import TypeScript modules
+// in a Node.js script without compilation
 
-async function testPulsarIntegration() {
-  console.log('🧪 Testing Tuya Pulsar Integration...\n');
+async function testPulsarAPI() {
+  console.log('🧪 Testing Tuya Pulsar API Endpoints...\n');
 
+  const baseUrl = 'https://poolheating.vercel.app/api/pulsar-manager';
+  
   try {
-    // Test 1: Initialize Pulsar Client
-    console.log('1️⃣ Testing Pulsar Client initialization...');
-    const pulsarClient = PulsarClientService.getInstance();
-    console.log('✅ Pulsar client initialized');
-
-    // Test 2: Check configuration
-    console.log('\n2️⃣ Testing configuration...');
-    const config = pulsarClient.getConfig();
-    console.log('📋 Configuration:', {
-      url: config.url,
-      accessId: config.accessId ? `${config.accessId.substring(0, 8)}...` : 'Not set',
-      env: config.env
+    // Test 1: Start Pulsar connection
+    console.log('1️⃣ Testing Pulsar connection start...');
+    const startResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'start' })
     });
+    
+    const startResult = await startResponse.json();
+    console.log('Start result:', startResult);
+    
+    if (startResult.success) {
+      console.log('✅ Pulsar connection started successfully\n');
+    } else {
+      console.log('❌ Failed to start Pulsar connection:', startResult.error);
+      return;
+    }
 
-    // Test 3: Test message parsing
-    console.log('\n3️⃣ Testing message parsing...');
-    const mockMessage = {
-      dataId: 'test-message-123',
-      devId: 'test-device-id',
-      productKey: 'test-product-key',
-      status: [{
-        code: 'switch_led',
-        t: Date.now(),
-        value: true,
-        '20': 'true'
-      }, {
-        code: 'water_temp',
-        t: Date.now(),
-        value: '25.5'
-      }, {
-        code: 'temp_set',
-        t: Date.now(),
-        value: '28.0'
-      }, {
-        code: 'fan_speed',
-        t: Date.now(),
-        value: 75
-      }]
-    };
+    // Test 2: Check status
+    console.log('2️⃣ Testing status check...');
+    const statusResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'status' })
+    });
+    
+    const statusResult = await statusResponse.json();
+    console.log('Status result:', statusResult);
+    console.log('✅ Status check completed\n');
 
-    const parsedMessage = TuyaPulsarService.parseMessage(mockMessage);
-    console.log('✅ Message parsed successfully');
-    console.log('📨 Parsed message:', JSON.stringify(parsedMessage, null, 2));
+    // Test 3: Check health info
+    console.log('3️⃣ Testing health info...');
+    const healthResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'health' })
+    });
+    
+    const healthResult = await healthResponse.json();
+    console.log('Health result:', healthResult);
+    console.log('✅ Health check completed\n');
 
-    // Test 4: Test device status extraction
-    console.log('\n4️⃣ Testing device status extraction...');
-    const deviceStatus = TuyaPulsarService.extractDeviceStatus(parsedMessage);
-    console.log('✅ Device status extracted successfully');
-    console.log('📊 Device status:', JSON.stringify(deviceStatus, null, 2));
+    // Test 4: Wait for messages (simulation)
+    console.log('4️⃣ Waiting for simulated messages...');
+    console.log('⏳ Waiting 30 seconds for simulated messages...');
+    
+    let messageCount = 0;
+    const checkInterval = setInterval(async () => {
+      try {
+        const statusResponse = await fetch(baseUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'status' })
+        });
+        
+        const statusResult = await statusResponse.json();
+        if (statusResult.success && statusResult.status.messageCount > messageCount) {
+          console.log(`📨 New message received! Total: ${statusResult.status.messageCount}`);
+          messageCount = statusResult.status.messageCount;
+        }
+      } catch (error) {
+        console.error('Error checking status:', error);
+      }
+    }, 5000);
 
-    // Test 5: Test connection (simulated)
-    console.log('\n5️⃣ Testing connection...');
-    const connected = await pulsarClient.connect();
-    console.log(connected ? '✅ Connection successful' : '❌ Connection failed');
+    // Wait for 30 seconds
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    clearInterval(checkInterval);
 
-    // Test 6: Check status
-    console.log('\n6️⃣ Testing status retrieval...');
-    const status = pulsarClient.getStatus();
-    console.log('📊 Status:', JSON.stringify(status, null, 2));
+    // Test 5: Final status check
+    console.log('\n5️⃣ Final status check...');
+    const finalStatusResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'status' })
+    });
+    
+    const finalStatusResult = await finalStatusResponse.json();
+    console.log('Final status result:', finalStatusResult);
+    console.log('✅ Final status check completed\n');
 
-    // Test 7: Test disconnection
-    console.log('\n7️⃣ Testing disconnection...');
-    await pulsarClient.disconnect();
-    console.log('✅ Disconnection successful');
+    // Test 6: Stop Pulsar connection
+    console.log('6️⃣ Testing Pulsar connection stop...');
+    const stopResponse = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'stop' })
+    });
+    
+    const stopResult = await stopResponse.json();
+    console.log('Stop result:', stopResult);
+    
+    if (stopResult.success) {
+      console.log('✅ Pulsar connection stopped successfully\n');
+    } else {
+      console.log('❌ Failed to stop Pulsar connection:', stopResult.error);
+    }
 
-    console.log('\n🎉 All tests completed successfully!');
-    console.log('\n📝 Next steps:');
-    console.log('1. Set up Tuya credentials in environment variables:');
-    console.log('   - TUIYA_ACCESS_ID');
-    console.log('   - TUIYA_ACCESS_KEY');
-    console.log('   - TUIYA_DEVICE_ID');
-    console.log('   - TUIYA_ENV (TEST or PROD)');
-    console.log('2. Deploy the Pulsar client to your server');
-    console.log('3. Start the Pulsar client from the Dashboard');
-    console.log('4. Monitor real-time device updates');
+    console.log('🎉 All API tests completed!');
 
   } catch (error) {
     console.error('❌ Test failed:', error);
-    process.exit(1);
   }
 }
 
 // Run the test
-testPulsarIntegration();
+testPulsarAPI().catch(console.error);

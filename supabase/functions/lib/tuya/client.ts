@@ -50,6 +50,27 @@ export class TuyaClient {
   }
 
   /**
+   * Generate HMAC signature using Web Crypto API
+   */
+  private async generateSignature(message: string, secret: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(message);
+    
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const signature = await crypto.subtle.sign('HMAC', key, messageData);
+    const signatureArray = Array.from(new Uint8Array(signature));
+    return signatureArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  /**
    * Get or refresh access token
    */
   async getAccessToken(): Promise<string> {
@@ -61,14 +82,21 @@ export class TuyaClient {
     console.log('🔄 Getting new Tuya access token...');
 
     const pathWithQuery = `/v1.0/token?grant_type=1`;
-    const headers = await createTuyaHeaders(
-      this.clientId,
-      this.clientSecret,
-      undefined, // no access token for token request
-      'GET',
-      '',
-      pathWithQuery
-    );
+    const timestamp = Date.now();
+    
+    // Use simplified signing like the working Vercel API
+    const stringToSign = 'GET' + '\n' + '\n' + '\n' + pathWithQuery;
+    const signString = `${this.clientId}${timestamp}${stringToSign}`;
+    
+    const signature = await this.generateSignature(signString, this.clientSecret);
+    
+    const headers = {
+      'client_id': this.clientId,
+      't': timestamp.toString(),
+      'sign_method': 'HMAC-SHA256',
+      'sign': signature,
+      'Content-Type': 'application/json'
+    };
 
     const response = await fetch(`${this.baseUrl}${pathWithQuery}`, {
       method: 'GET',
@@ -97,14 +125,22 @@ export class TuyaClient {
     const accessToken = await this.getAccessToken();
     
     const pathWithQuery = `/v1.0/iot-03/devices/${deviceId}/status`;
-    const headers = await createTuyaHeaders(
-      this.clientId,
-      this.clientSecret,
-      accessToken,
-      'GET',
-      '',
-      pathWithQuery
-    );
+    const timestamp = Date.now();
+    
+    // Use simplified signing like the working Vercel API
+    const stringToSign = 'GET' + '\n' + '\n' + '\n' + pathWithQuery;
+    const signString = `${this.clientId}${accessToken}${timestamp}${stringToSign}`;
+    
+    const signature = await this.generateSignature(signString, this.clientSecret);
+    
+    const headers = {
+      'client_id': this.clientId,
+      'access_token': accessToken,
+      't': timestamp.toString(),
+      'sign_method': 'HMAC-SHA256',
+      'sign': signature,
+      'Content-Type': 'application/json'
+    };
 
     console.log(`📡 Fetching device status for ${deviceId}...`);
 
@@ -124,14 +160,19 @@ export class TuyaClient {
         this.tokenExpiresAt = undefined;
         
         const newAccessToken = await this.getAccessToken();
-        const newHeaders = await createTuyaHeaders(
-          this.clientId,
-          this.clientSecret,
-          newAccessToken,
-          'GET',
-          '',
-          pathWithQuery
-        );
+        const newTimestamp = Date.now();
+        const newStringToSign = 'GET' + '\n' + '\n' + '\n' + pathWithQuery;
+        const newSignString = `${this.clientId}${newAccessToken}${newTimestamp}${newStringToSign}`;
+        const newSignature = await this.generateSignature(newSignString, this.clientSecret);
+        
+        const newHeaders = {
+          'client_id': this.clientId,
+          'access_token': newAccessToken,
+          't': newTimestamp.toString(),
+          'sign_method': 'HMAC-SHA256',
+          'sign': newSignature,
+          'Content-Type': 'application/json'
+        };
 
         const retryResponse = await fetch(`${this.baseUrl}${pathWithQuery}`, {
           method: 'GET',

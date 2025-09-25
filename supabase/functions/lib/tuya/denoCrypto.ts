@@ -45,22 +45,21 @@ export async function hmacSha256(message: string, secret: string): Promise<strin
 }
 
 /**
- * Generate Tuya API signature
+ * Generate Tuya API signature (simplified version that matches working Vercel API)
  */
 export async function generateTuyaSignature(
   params: TuyaSignParams,
   clientSecret: string
 ): Promise<string> {
-  const { clientId, accessToken, timestamp, nonce, method, body, pathWithQuery } = params;
+  const { clientId, accessToken, timestamp, method, pathWithQuery } = params;
   
-  // Create stringToSign
-  const bodyHash = await sha256Hex(body);
-  const stringToSign = [method, bodyHash, '', pathWithQuery].join('\n');
+  // Use the same signing algorithm as the working Vercel API
+  const stringToSign = method + '\n' + '\n' + '\n' + pathWithQuery;
   
-  // Create sign string
+  // Create sign string (no nonce, no body hash)
   const signString = accessToken 
-    ? `${clientId}${accessToken}${timestamp}${nonce}${stringToSign}`
-    : `${clientId}${timestamp}${nonce}${stringToSign}`;
+    ? `${clientId}${accessToken}${timestamp}${stringToSign}`
+    : `${clientId}${timestamp}${stringToSign}`;
   
   // Generate HMAC signature
   return await hmacSha256(signString, clientSecret);

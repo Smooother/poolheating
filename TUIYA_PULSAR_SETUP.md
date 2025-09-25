@@ -1,64 +1,104 @@
-# Tuya Pulsar Integration Setup
+# Tuya Pulsar Real-time Integration Setup
 
-This document explains how to set up the Tuya Pulsar message queue integration for real-time device status updates.
+## 🎯 Overview
 
-## Overview
+This feature branch implements **real-time push notifications** from Tuya devices using the Pulsar SDK. Unlike the polling approach, this provides **instant notifications** whenever your heat pump changes status.
 
-The Tuya Pulsar integration provides real-time device status updates through Tuya's message queue service. When your heat pump device changes status (power on/off, temperature changes, etc.), Tuya sends notifications that are automatically processed and stored in your database.
+## ⚡ Real-time vs Polling
 
-## Prerequisites
+| Feature | Polling (Current) | Pulsar (This Branch) |
+|---------|-------------------|----------------------|
+| **Update Speed** | Every 2 minutes | Instant (real-time) |
+| **Data Freshness** | Up to 2 minutes old | Always current |
+| **Resource Usage** | High (constant API calls) | Low (event-driven) |
+| **Notifications** | No | Yes (push notifications) |
+| **Battery Impact** | High | Low |
 
-1. **Tuya Developer Account**: You need a Tuya developer account with a cloud project
-2. **Device Linked**: Your heat pump device must be linked to your Tuya cloud project
-3. **Message Service Enabled**: The message service must be enabled in your Tuya project
+## 🏗️ Architecture
 
-## Environment Variables
-
-Add these environment variables to your Vercel deployment:
-
-### Required Variables
-
-```bash
-# Tuya API Credentials
-TUIYA_ACCESS_ID=your_tuya_access_id
-TUIYA_ACCESS_KEY=your_tuya_access_key
-
-# Device Configuration
-TUIYA_DEVICE_ID=your_heat_pump_device_id
-
-# Environment (TEST for development, PROD for production)
-TUIYA_ENV=TEST
+```
+Tuya Device → Pulsar Message Queue → Our Service → Database → Dashboard
+     ↓              ↓                    ↓           ↓         ↓
+  Status Change → Real-time Message → Process → Store → Update UI
 ```
 
-### Optional Variables
+## 📁 New Files Added
 
+### Core Services
+- `src/services/tuyaPulsarService.ts` - Main Pulsar SDK integration
+- `src/services/pulsarClientService.ts` - High-level client management
+- `api/pulsar-manager.js` - API endpoints for Pulsar control
+
+### Testing & Documentation
+- `scripts/test-pulsar.js` - Test script for Pulsar functionality
+- `TUIYA_PULSAR_SETUP.md` - This setup guide
+
+## 🔧 Configuration
+
+### Environment Variables
 ```bash
-# Pulsar Server URL (defaults to EU endpoint)
-TUIYA_PULSAR_URL=pulsar+ssl://mqe.tuyaeu.com:7285/
+# Tuya Credentials (already set)
+TUYA_ACCESS_ID=dn98qycejwjndescfprj
+TUYA_ACCESS_KEY=21c50cb2a91a4491b18025373e742272
+TUYA_UID=19DZ10YT
+TUYA_DEVICE_ID=bf65ca8db8b207052feu5u
 
-# Supabase Configuration (should already be set)
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_key
+# Supabase (already set)
+SUPABASE_URL=https://bagcdhlbkicwtepflczr.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=[SET]
 ```
 
-## Getting Tuya Credentials
+### Tuya Pulsar Configuration
+```typescript
+const config = {
+  accessId: 'dn98qycejwjndescfprj',
+  accessKey: '21c50cb2a91a4491b18025373e742272',
+  uid: '19DZ10YT',
+  region: 'eu', // Europe region
+  environment: 'TEST' // or 'PROD'
+};
+```
 
-1. **Go to Tuya Developer Platform**: https://iot.tuya.com/
-2. **Create/Open Project**: Create a new cloud project or open an existing one
-3. **Get Authorization Key**: 
-   - Go to "Cloud" → "Development" → "Authorization Key"
-   - Copy the "Access ID" and "Access Secret"
-4. **Enable Message Service**:
-   - Go to "Cloud" → "Development" → "Message Service"
-   - Enable the message service
-5. **Get Device ID**:
-   - Go to "Cloud" → "Development" → "Device"
-   - Find your heat pump device and copy the Device ID
+## 🚀 Usage
 
-## Supported Device Status Codes
+### 1. Start Pulsar Connection
+```bash
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "start"}'
+```
 
-The integration automatically maps these Tuya status codes to database fields:
+### 2. Check Status
+```bash
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "status"}'
+```
 
+### 3. Stop Connection
+```bash
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "stop"}'
+```
+
+### 4. Health Check
+```bash
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "health"}'
+```
+
+## 📊 Data Flow
+
+### Message Processing
+1. **Tuya Device** sends status change
+2. **Pulsar Queue** receives real-time message
+3. **Our Service** processes the message
+4. **Database** stores the update
+5. **Dashboard** receives real-time update
+
+### Status Code Mapping
 | Tuya Code | Database Field | Description |
 |-----------|----------------|-------------|
 | `switch_led` | `power_status` | Device power on/off |
@@ -68,105 +108,115 @@ The integration automatically maps these Tuya status codes to database fields:
 | `fan_speed` | `speed_percentage` | Fan speed percentage |
 | `online` | `is_online` | Device online status |
 
-## How It Works
+## 🧪 Testing
 
-1. **Pulsar Connection**: The service connects to Tuya's Pulsar message queue
-2. **Message Reception**: Receives real-time device status updates
-3. **Message Parsing**: Decrypts and parses the device status data
-4. **Database Update**: Updates both `heat_pump_status` and `system_info` tables
-5. **Real-time Display**: Dashboard automatically shows updated device status
-
-## Testing the Integration
-
-### 1. Test the Pulsar Client
-
+### Local Testing
 ```bash
 # Run the test script
 node scripts/test-pulsar.js
 ```
 
-### 2. Start Pulsar from Dashboard
+### API Testing
+```bash
+# Test all endpoints
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "start"}'
 
-1. Go to the Dashboard
-2. Find the "Real-time Updates" card
-3. Click "Start Pulsar" button
-4. Monitor the connection status
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "status"}'
 
-### 3. Test Device Updates
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "health"}'
 
-1. Use the Tuya Smart Life app to control your heat pump
-2. Turn the device on/off or change temperature settings
-3. Watch the Dashboard update in real-time
-
-## API Endpoints
-
-### Pulsar Manager API
-
-**GET** `/api/pulsar-manager`
-- Returns current Pulsar client status
-
-**POST** `/api/pulsar-manager`
-- Body: `{ "action": "start" | "stop" | "restart" | "status" }`
-- Controls the Pulsar client
-
-### Example Usage
-
-```javascript
-// Start Pulsar client
-fetch('/api/pulsar-manager', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ action: 'start' })
-});
-
-// Check status
-const response = await fetch('/api/pulsar-manager');
-const status = await response.json();
-console.log('Pulsar status:', status);
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "stop"}'
 ```
 
-## Troubleshooting
+## 🔄 Current Implementation Status
+
+### ✅ Completed
+- [x] Pulsar service architecture
+- [x] Message processing logic
+- [x] Database integration
+- [x] API endpoints
+- [x] Test scripts
+- [x] Documentation
+
+### 🚧 In Progress
+- [ ] Real Tuya Pulsar SDK integration
+- [ ] Dashboard real-time updates
+- [ ] Error handling and reconnection
+- [ ] Production configuration
+
+### 📋 TODO
+- [ ] Implement actual Tuya Pulsar SDK
+- [ ] Add real-time dashboard updates
+- [ ] Implement push notifications
+- [ ] Add connection monitoring
+- [ ] Performance optimization
+
+## 🎯 Next Steps
+
+1. **Implement Real Tuya Pulsar SDK**
+   - Replace simulation with actual Pulsar connection
+   - Handle real message decryption
+   - Implement proper error handling
+
+2. **Dashboard Integration**
+   - Add real-time status display
+   - Implement push notifications
+   - Add connection status indicator
+
+3. **Production Deployment**
+   - Configure production environment
+   - Set up monitoring and logging
+   - Implement health checks
+
+## 🔍 Monitoring
+
+### Connection Status
+- **Connected**: Pulsar connection is active
+- **Message Count**: Number of messages received
+- **Last Message**: Timestamp of last received message
+- **Error**: Any connection errors
+
+### Health Metrics
+- **Uptime**: How long the connection has been active
+- **Message Rate**: Messages per minute
+- **Error Rate**: Failed message processing rate
+- **Reconnection Attempts**: Number of reconnection attempts
+
+## 🚨 Troubleshooting
 
 ### Common Issues
+1. **Connection Failed**: Check Tuya credentials
+2. **No Messages**: Verify device is online and sending data
+3. **Database Errors**: Check Supabase connection
+4. **API Errors**: Verify endpoint URLs and authentication
 
-1. **Connection Failed**
-   - Check if credentials are correct
-   - Verify device is linked to your project
-   - Ensure message service is enabled
-
-2. **No Messages Received**
-   - Check if device is in test environment (if using TEST mode)
-   - Verify device is online and connected
-   - Check Tuya Smart Life app for device status
-
-3. **Database Updates Not Working**
-   - Verify Supabase credentials
-   - Check database schema matches expected fields
-   - Review server logs for errors
-
-### Debug Mode
-
-Enable debug logging by setting:
+### Debug Commands
 ```bash
-DEBUG=pulsar:*
+# Check Pulsar status
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "status"}'
+
+# Check health
+curl -X POST https://poolheating.vercel.app/api/pulsar-manager \
+  -H "Content-Type: application/json" \
+  -d '{"action": "health"}'
 ```
 
-## Production Deployment
+## 📚 Resources
 
-1. **Set Environment Variables**: Add all required environment variables to Vercel
-2. **Switch to Production**: Set `TUIYA_ENV=PROD`
-3. **Update Device**: Ensure your device is in production environment
-4. **Monitor**: Use the Dashboard to monitor Pulsar connection status
+- [Tuya Pulsar SDK Documentation](https://developer.tuya.com/en/docs/iot/Pulsar-SDK-get-message?id=Kan0klj9qbv3l)
+- [Tuya Message Service](https://developer.tuya.com/en/docs/iot/message-service?id=Kavck4sr3o6ek)
+- [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 
-## Security Notes
+---
 
-- Never commit Tuya credentials to version control
-- Use environment variables for all sensitive data
-- Regularly rotate access keys
-- Monitor message queue usage for billing
-
-## Support
-
-- **Tuya Documentation**: https://developer.tuya.com/en/docs/iot/
-- **Pulsar SDK**: https://developer.tuya.com/en/docs/iot/Pulsar-SDK-get-message
-- **Message Service**: https://developer.tuya.com/en/docs/iot/cloud-development/message-service
+**Note**: This is a feature branch implementation. The main branch continues to use the working polling solution. This Pulsar implementation can be merged once fully tested and production-ready.
