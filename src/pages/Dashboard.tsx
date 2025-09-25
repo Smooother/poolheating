@@ -14,6 +14,7 @@ import { calculateRollingAverage, classifyPrice } from "@/services/priceService"
 import { useSettings } from "@/contexts/SettingsContext";
 import { CONFIG } from "@/lib/config";
 import { HeatPumpStatusService, HeatPumpStatus } from "@/services/heatPumpStatusService";
+import { StatusService, StatusData } from "@/services/statusService";
 import { HeatPumpCommandService } from "@/services/heatPumpCommandService";
 import { AutomationService, AutomationSettings } from "@/services/automationService";
 import { calculateConsumerPrice, getPriceBreakdown } from "@/services/priceCalculationService";
@@ -256,7 +257,7 @@ const Dashboard = () => {
           variant: result.success ? "default" : "destructive"
         });
       }
-    } catch (error) {
+            } catch (error) {
       console.error('Failed to start Pulsar:', error);
       toast({
         title: "Pulsar Error",
@@ -297,6 +298,24 @@ const Dashboard = () => {
   // Fetch fresh heat pump status
   const fetchHeatPumpStatus = async () => {
     try {
+      // Try the working status API first
+      const statusData = await StatusService.getStatus();
+      if (statusData) {
+        const heatPumpStatus = StatusService.convertToHeatPumpStatus(statusData);
+        setData(prev => ({
+          ...prev,
+          heatPump: heatPumpStatus,
+          currentPrice: statusData.currentPrice,
+          priceState: statusData.priceState.toLowerCase() as 'low' | 'normal' | 'high',
+          lastUpdate: new Date()
+        }));
+        
+        // Update system info with heat pump data
+        await updateSystemInfo(heatPumpStatus);
+        return;
+      }
+
+      // Fallback to database status
       const status = await HeatPumpStatusService.getLatestStatus();
       if (status) {
         setData(prev => ({
@@ -375,7 +394,7 @@ const Dashboard = () => {
         setTimeout(async () => {
           await fetchHeatPumpStatus();
         }, 2000);
-        toast({
+            toast({
           title: "Status Updated",
           description: "Heat pump status refreshed from device",
         });
@@ -411,12 +430,12 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Failed to toggle automation:', error);
-      toast({
+              toast({
         title: "Error",
         description: "Failed to update automation settings",
-        variant: "destructive",
-      });
-    }
+                variant: "destructive",
+              });
+            }
   };
 
   // Toggle power
@@ -426,8 +445,8 @@ const Dashboard = () => {
       const result = await HeatPumpCommandService.setPowerState(!currentPower);
       
       if (result.success) {
-        setData(prev => ({
-          ...prev,
+      setData(prev => ({
+        ...prev,
           heatPump: prev.heatPump ? {
             ...prev.heatPump,
             power_status: !currentPower ? 'on' : 'off'
@@ -443,12 +462,12 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Failed to toggle power:', error);
-      toast({
+          toast({
         title: "Power Toggle Failed",
         description: error instanceof Error ? error.message : "Failed to change heat pump power state",
-        variant: "destructive",
-      });
-    }
+            variant: "destructive",
+          });
+        }
   };
 
   // Update target temperature
@@ -463,10 +482,10 @@ const Dashboard = () => {
             target_temp: targetTemp
           } : null
         }));
-        toast({
+          toast({
           title: "Temperature Updated",
           description: `Target temperature set to ${targetTemp}°C`,
-        });
+          });
       } else {
         throw new Error(result.error || 'Temperature update failed');
       }
@@ -499,20 +518,20 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-        <div>
+        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+          <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pool Heating Dashboard</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Monitor and control your pool heating system</p>
-        </div>
+          </div>
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${
               data.heatPump?.is_online ? 'bg-success' : 'bg-destructive'
             }`}></div>
             <span className="text-sm text-muted-foreground">
               {data.heatPump?.is_online ? 'Device Online' : 'Device Offline'}
-            </span>
-          </div>
+              </span>
+            </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
@@ -552,10 +571,10 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-lg font-semibold">Current Status</h3>
                 <p className="text-sm text-muted-foreground">System power and automation state</p>
-              </div>
-            </div>
+          </div>
+        </div>
 
-            <div className="space-y-4">
+          <div className="space-y-4">
               {/* Power Toggle */}
               <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
                 <div className="flex items-center space-x-3">
@@ -590,15 +609,15 @@ const Dashboard = () => {
                 </div>
                 <Badge className="bg-primary/10 text-primary">
                   {data.heatPump?.water_temp?.toFixed(1) || '--'}°C
-                </Badge>
-              </div>
+              </Badge>
+            </div>
 
               <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
                 <span className="text-sm font-medium">Setting Water Temperature</span>
                 <Badge variant="outline">
                   {data.heatPump?.target_temp || targetTemp}°C
                 </Badge>
-              </div>
+                    </div>
 
               {/* Device Status */}
               <div className="flex items-center justify-between p-3 bg-muted/5 rounded-lg border">
@@ -610,7 +629,7 @@ const Dashboard = () => {
                 }`}>
                   {data.heatPump?.is_online ? 'Online' : 'Offline'}
                 </Badge>
-              </div>
+                    </div>
 
               {/* Last Communication */}
               {data.heatPump?.updated_at && (
@@ -854,7 +873,7 @@ const Dashboard = () => {
                       {info.status}
                     </span>
                   </div>
-                </div>
+            </div>
               ))}
             </div>
           </div>
@@ -864,7 +883,7 @@ const Dashboard = () => {
       {/* Collapsible Charts */}
       {showCharts && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="status-card">
+        <Card className="status-card">
             <div className="p-6 space-y-6">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -875,11 +894,11 @@ const Dashboard = () => {
                   <p className="text-sm text-muted-foreground">Historical and forecasted electricity prices</p>
                 </div>
               </div>
-              <PriceChart currentBiddingZone={settings.biddingZone} />
-            </div>
-          </Card>
+            <PriceChart currentBiddingZone={settings.biddingZone} />
+          </div>
+        </Card>
 
-          <Card className="status-card">
+        <Card className="status-card">
             <div className="p-6 space-y-6">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-accent/10 rounded-lg">
@@ -890,10 +909,10 @@ const Dashboard = () => {
                   <p className="text-sm text-muted-foreground">Predicted temperature adjustments</p>
                 </div>
               </div>
-              <TargetForecast biddingZone={settings.biddingZone} />
-            </div>
-          </Card>
-        </div>
+            <TargetForecast biddingZone={settings.biddingZone} />
+          </div>
+        </Card>
+      </div>
       )}
     </div>
   );
