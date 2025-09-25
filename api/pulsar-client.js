@@ -5,6 +5,7 @@
 
 const { Client } = require('pulsar-client');
 const CryptoJS = require('crypto-js');
+const { createClient } = require('@supabase/supabase-js');
 
 // Tuya Pulsar configuration
 const PULSAR_CONFIG = {
@@ -32,6 +33,12 @@ let connectionStatus = {
   lastMessage: null,
   error: null
 };
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://bagcdhlbkicwtepflczr.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+);
 
 /**
  * Initialize Pulsar connection
@@ -194,32 +201,42 @@ async function processMessage(message) {
  */
 async function updateDeviceStatus(deviceId, code, value, timestamp) {
   try {
-    // For now, just log the update
-    // In a real implementation, you would update the database here
     console.log(`✅ Device ${deviceId} - ${code}: ${value} (${new Date(timestamp).toISOString()})`);
     
-    // TODO: Update Supabase database
-    // const { createClient } = require('@supabase/supabase-js');
-    // const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    // 
-    // // Update telemetry_current table
-    // await supabase.from('telemetry_current').upsert({
-    //   device_id: deviceId,
-    //   code: code,
-    //   value: value,
-    //   updated_at: new Date().toISOString()
-    // }, {
-    //   onConflict: 'device_id,code',
-    //   ignoreDuplicates: false
-    // });
-    // 
-    // // Insert into telemetry_history table
-    // await supabase.from('telemetry_history').insert({
-    //   device_id: deviceId,
-    //   code: code,
-    //   value: value,
-    //   ts: timestamp
-    // });
+    // Update telemetry_current table
+    const { error: currentError } = await supabase
+      .from('telemetry_current')
+      .upsert({
+        device_id: deviceId,
+        code: code,
+        value: value,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'device_id,code',
+        ignoreDuplicates: false
+      });
+
+    if (currentError) {
+      console.error('❌ Error upserting telemetry_current:', currentError);
+      return;
+    }
+
+    // Insert into telemetry_history table
+    const { error: historyError } = await supabase
+      .from('telemetry_history')
+      .insert({
+        device_id: deviceId,
+        code: code,
+        value: value,
+        ts: timestamp
+      });
+
+    if (historyError) {
+      console.error('❌ Error inserting telemetry_history:', historyError);
+      return;
+    }
+
+    console.log(`✅ Stored ${code}: ${value} in database`);
     
   } catch (error) {
     console.error('❌ Error updating device status:', error);
