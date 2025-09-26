@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Tuya API Test",
+    "description": "Complete Tuya API test collection with signature generation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get Device Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "client_id",
+            "value": "{{client_id}}",
+            "type": "text"
+          },
+          {
+            "key": "t",
+            "value": "{{timestamp}}",
+            "type": "text"
+          },
+          {
+            "key": "nonce",
+            "value": "{{nonce}}",
+            "type": "text"
+          },
+          {
+            "key": "sign",
+            "value": "{{signature}}",
+            "type": "text"
+          },
+          {
+            "key": "sign_method",
+            "value": "HMAC-SHA256",
+            "type": "text"
+          },
+          {
+            "key": "access_token",
+            "value": "{{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1.0/devices/{{device_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["v1.0", "devices", "{{device_id}}", "status"]
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Generate timestamp",
+              "const timestamp = Date.now().toString();",
+              "pm.environment.set('timestamp', timestamp);",
+              "",
+              "// Generate nonce (UUID)",
+              "const nonce = pm.variables.replace('{{$randomUUID}}');",
+              "pm.environment.set('nonce', nonce);",
+              "",
+              "// Get request details",
+              "const method = pm.request.method;",
+              "const path = pm.request.url.getPath();",
+              "",
+              "// Create string to sign",
+              "const stringToSign = [",
+              "    method.toUpperCase(),",
+              "    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',",
+              "    'application/json',",
+              "    timestamp,",
+              "    nonce,",
+              "    path",
+              "].join('\\n');",
+              "",
+              "console.log('String to sign:', stringToSign);",
+              "",
+              "// Generate HMAC-SHA256 signature",
+              "const signature = CryptoJS.HmacSHA256(stringToSign, pm.environment.get('client_secret')).toString(CryptoJS.enc.Base64);",
+              "pm.environment.set('signature', signature);",
+              "",
+              "console.log('Generated signature:', signature);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://openapi.tuyaeu.com"
+    },
+    {
+      "key": "client_id",
+      "value": "dn98qycejwjndescfprj"
+    },
+    {
+      "key": "client_secret",
+      "value": "21c50cb2c8b8b8b8b8b8b8b8b8b8b8b8b"
+    },
+    {
+      "key": "device_id",
+      "value": "bf65ca8db8b207052feu5u"
+    },
+    {
+      "key": "access_token",
+      "value": "YOUR_ACCESS_TOKEN_HERE"
+    }
+  ]
+}
